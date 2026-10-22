@@ -93,4 +93,4 @@ Signing and the release flow are in [`../scripts/`](../scripts/). The release AP
 - Telemetry/Nimbus/Adjust/Sentry and some Mozilla branding are still present in the current
   release.
 - No GOST TLS. The `.ru`/`.рф` fallback only accepts chains rooted in the two bundled roots.
-- The ARM64 APK still needs testing on a physical ARM64 device.
+- The ARM64 APK has been tested on a physical ARM64 device.
