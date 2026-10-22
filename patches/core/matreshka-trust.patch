@@ -1,0 +1,550 @@
+diff --git a/mobile/android/geckoview/api.txt b/mobile/android/geckoview/api.txt
+index 75692a6..7a896db 100644
+--- a/mobile/android/geckoview/api.txt
++++ b/mobile/android/geckoview/api.txt
+@@ -1111,6 +1111,7 @@ package org.mozilla.geckoview {
+     method @Nullable public String[] getLocales();
+     method public boolean getLoginAutofillEnabled();
+     method public boolean getLowMemoryDetection();
++    method @NonNull public String getMatreshkaTrust();
+     method public boolean getParallelMarkingEnabled();
+     method public boolean getPauseForDebuggerEnabled();
+     method @NonNull public boolean getPostQuantumKeyExchangeEnabled();
+@@ -1169,6 +1170,7 @@ package org.mozilla.geckoview {
+     method @NonNull public GeckoRuntimeSettings setLnaEnabled(boolean);
+     method public void setLocales(@Nullable String[]);
+     method @NonNull public GeckoRuntimeSettings setLoginAutofillEnabled(boolean);
++    method @NonNull public GeckoRuntimeSettings setMatreshkaTrust(@NonNull String);
+     method @NonNull public GeckoRuntimeSettings setParallelMarkingEnabled(boolean);
+     method @NonNull public GeckoRuntimeSettings setPostQuantumKeyExchangeEnabled(boolean);
+     method @NonNull public GeckoRuntimeSettings setPreferredColorScheme(int);
+@@ -1243,6 +1245,7 @@ package org.mozilla.geckoview {
+     method @NonNull public GeckoRuntimeSettings.Builder locales(@Nullable String[]);
+     method @NonNull public GeckoRuntimeSettings.Builder loginAutofillEnabled(boolean);
+     method @NonNull public GeckoRuntimeSettings.Builder lowMemoryDetection(boolean);
++    method @NonNull public GeckoRuntimeSettings.Builder matreshkaTrust(@NonNull String);
+     method @NonNull public GeckoRuntimeSettings.Builder pauseForDebugger(boolean);
+     method @NonNull public GeckoRuntimeSettings.Builder preferredColorScheme(int);
+     method @NonNull public GeckoRuntimeSettings.Builder remoteDebuggingEnabled(boolean);
+diff --git a/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoRuntimeSettings.java b/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoRuntimeSettings.java
+index 2c0746b..0c72294 100644
+--- a/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoRuntimeSettings.java
++++ b/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/GeckoRuntimeSettings.java
+@@ -629,6 +629,22 @@ public final class GeckoRuntimeSettings extends RuntimeSettings {
+       return this;
+     }
+ 
++    /**
++     * Set the Matreshka host-scoped CA trust bundle.
++     *
++     * <p>The bundle is a compact text format: the first non-empty, non-comment line is a
++     * comma-separated host allowlist, and every following non-empty, non-comment line is a
++     * base64-encoded DER CA certificate. An empty value (the default) leaves stock trust behavior
++     * unchanged for every host.
++     *
++     * @param json Trust bundle in the Matreshka compact format.
++     * @return This Builder instance.
++     */
++    public @NonNull Builder matreshkaTrust(final @NonNull String json) {
++      getSettings().setMatreshkaTrust(json);
++      return this;
++    }
++
+     /**
+      * Set the factor by which to increase the keepalive timeout when the NS_HTTP_LARGE_KEEPALIVE
+      * flag is used for a connection.
+@@ -839,6 +855,8 @@ public final class GeckoRuntimeSettings extends RuntimeSettings {
+           "docshell.shistory.sameDocumentNavigationOverridesLoadType.forceDisable", "");
+   /* package */ final Pref<String> mBannedPorts =
+       new Pref<String>("network.security.ports.banned", "");
++  /* package */ final Pref<String> mMatreshkaTrust =
++      new Pref<String>("matreshka.trust.json", "");
+   /* package */ final PrefWithoutDefault<Boolean> mRemoteSettingCrashPullNeverShowAgain =
+       new PrefWithoutDefault<Boolean>("browser.crashReports.requestedNeverShowAgain");
+   /* package */ final PrefWithoutDefault<String> mCrliteChannel =
+@@ -2482,6 +2500,27 @@ public final class GeckoRuntimeSettings extends RuntimeSettings {
+     return mCrliteChannel.get();
+   }
+ 
++  /**
++   * Get the Matreshka host-scoped CA trust bundle.
++   *
++   * @return The current trust bundle, or an empty string when unset.
++   */
++  public @NonNull String getMatreshkaTrust() {
++    return mMatreshkaTrust.get();
++  }
++
++  /**
++   * Set the Matreshka host-scoped CA trust bundle. The C++ trust code re-parses the bundle whenever
++   * the pref value changes, so updating it at runtime does not require rebuilding GeckoView.
++   *
++   * @param json Trust bundle in the Matreshka compact format.
++   * @return This GeckoRuntimeSettings instance.
++   */
++  public @NonNull GeckoRuntimeSettings setMatreshkaTrust(final @NonNull String json) {
++    mMatreshkaTrust.commit(json);
++    return this;
++  }
++
+   // For internal use only
+   /* protected */ @NonNull
+   GeckoRuntimeSettings setProcessCount(final int processCount) {
+diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+--- a/modules/libpref/init/StaticPrefList.yaml
++++ b/modules/libpref/init/StaticPrefList.yaml
+@@ -12438,6 +12438,38 @@
+   mirror: always
+ 
+ #---------------------------------------------------------------------------
++# Prefs starting with "matreshka."
++#---------------------------------------------------------------------------
++
++# Master switch for the Matreshka host-scoped trust bundle. This is a
++# RelaxedAtomicBool, so its mirrored getter is safe to call from the
++# certificate verification thread.
++- name: matreshka.trust.enabled
++  type: RelaxedAtomicBool
++  value: true
++  mirror: always
++
++# Allow .ru/.рф hosts that are not in the explicit bundle list to use the
++# bundled Russian Trusted CA certificates. The presented chain must still
++# validate to one of the bundled roots; arbitrary untrusted certificates are
++# never accepted.
++- name: matreshka.trust.ru_fallback
++  type: RelaxedAtomicBool
++  value: true
++  mirror: always
++
++# Compact trust bundle. The first non-empty, non-comment line is a
++# comma-separated host allowlist; every following non-empty, non-comment line
++# is a base64-encoded DER CA certificate. This is a DataMutexString, so its
++# mirrored getter can be read safely from the certificate verification thread.
++# The C++ side caches parsed data keyed by this pref value, so updating the
++# pref at runtime is sufficient and does not require rebuilding GeckoView.
++- name: matreshka.trust.json
++  type: DataMutexString
++  value: ""
++  mirror: always
++
++#---------------------------------------------------------------------------
+ # Prefs starting with "media."
+ #---------------------------------------------------------------------------
+ 
+diff --git a/modules/libpref/moz.build b/modules/libpref/moz.build
+index 208fb28..42042f9 100644
+--- a/modules/libpref/moz.build
++++ b/modules/libpref/moz.build
+@@ -58,6 +58,7 @@ pref_groups = [
+     "layout",
+     "logging",
+     "mathml",
++    "matreshka",
+     "media",
+     "memory",
+     "middlemouse",
+diff --git a/security/certverifier/NSSCertDBTrustDomain.cpp b/security/certverifier/NSSCertDBTrustDomain.cpp
+index 9fa06f4..a2437d4 100644
+--- a/security/certverifier/NSSCertDBTrustDomain.cpp
++++ b/security/certverifier/NSSCertDBTrustDomain.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include "CRLiteTimestamp.h"
+ #include "ExtendedValidation.h"
++#include "MatreshkaTrust.h"
+ #include "MultiLogCTVerifier.h"
+ #include "NSSErrorsService.h"
+ #include "PKCS11ModuleDB.h"
+@@ -293,6 +294,27 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
+         thirdPartyIntermediateInput, IssuerSource::ThirdPartyCertificates});
+   }
+ 
++  // Matreshka: for explicitly allowlisted hosts only, also consider the CA
++  // certificates bundled in matreshka.trust.json as potential issuers. The
++  // backing DER array must outlive CheckCandidates(), which is why it is
++  // declared in this scope.
++  nsTArray<nsTArray<uint8_t>> matreshkaCandidates;
++  if (mHostname) {
++    nsDependentCString host(mHostname);
++    if (GetMatreshkaIssuerCandidates(host, encodedIssuerName,
++                                     matreshkaCandidates)) {
++      for (auto& candidate : matreshkaCandidates) {
++        Input certDER;
++        Result rv = certDER.Init(candidate.Elements(), candidate.Length());
++        if (rv != Success) {
++          continue;
++        }
++        geckoRootCandidates.AppendElement(IssuerCandidateWithSource{
++            std::move(certDER), IssuerSource::ThirdPartyCertificates});
++      }
++    }
++  }
++
+   if (!mCertStorage) {
+     return Result::FATAL_ERROR_LIBRARY_FAILURE;
+   }
+@@ -515,6 +537,15 @@ Result NSSCertDBTrustDomain::GetCertTrust(EndEntityOrCA endEntityOrCA,
+     }
+   }
+ 
++  // Matreshka: only allowlisted hosts trust the exact bundled CA certificates.
++  // This intentionally does not alter trust decisions for any other host.
++  if (endEntityOrCA == EndEntityOrCA::MustBeCA && mHostname &&
++      IsMatreshkaBundledTrustAnchor(nsDependentCString(mHostname),
++                                    candidateCertDER)) {
++    trustLevel = TrustLevel::TrustAnchor;
++    return Success;
++  }
++
+   // This may be a third-party root.
+   for (const auto& thirdPartyRootInput : mThirdPartyRootInputs) {
+     if (InputsAreEqual(candidateCertDER, thirdPartyRootInput)) {
+diff --git a/security/manager/ssl/MatreshkaTrust.cpp b/security/manager/ssl/MatreshkaTrust.cpp
+new file mode 100644
+--- /dev/null
++++ b/security/manager/ssl/MatreshkaTrust.cpp
+@@ -0,0 +1,272 @@
++/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#include "MatreshkaTrust.h"
++
++#include <stdint.h>
++#include <utility>
++
++#include "mozilla/Base64.h"
++#include "mozilla/RefPtr.h"
++#include "mozilla/StaticMutex.h"
++#include "mozilla/StaticPrefs_matreshka.h"
++#include "mozpkix/pkixutil.h"
++#include "nsError.h"
++#include "nsISupportsImpl.h"
++#include "nsReadableUtils.h"
++
++namespace mozilla {
++namespace psm {
++
++using mozilla::pkix::BackCert;
++using mozilla::pkix::EndEntityOrCA;
++using mozilla::pkix::Input;
++using mozilla::pkix::InputsAreEqual;
++using mozilla::pkix::Result;
++using mozilla::pkix::Success;
++
++namespace {
++
++class MatreshkaTrustData final {
++ public:
++  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(MatreshkaTrustData)
++
++  nsTArray<nsCString> mHosts;
++  nsTArray<nsTArray<uint8_t>> mCerts;
++
++ private:
++  ~MatreshkaTrustData() = default;
++};
++
++StaticMutex sMatreshkaTrustMutex;
++nsCString sMatreshkaTrustCachedPref;
++RefPtr<MatreshkaTrustData> sMatreshkaTrustCachedData;
++
++void TrimASCII(nsACString& aString) {
++  static constexpr const char kWhitespace[] = " \t\r\n";
++  aString.Trim(kWhitespace);
++}
++
++void ParseHostLine(const nsACString& aLine, MatreshkaTrustData& aData) {
++  uint32_t start = 0;
++  while (start <= aLine.Length()) {
++    int32_t comma = aLine.FindChar(',', start);
++    uint32_t end = comma == kNotFound ? aLine.Length() : comma;
++    nsCString host(Substring(aLine, start, end - start));
++    TrimASCII(host);
++    if (!host.IsEmpty()) {
++      ToLowerCase(host);
++      if (host.Length() > 1 && host.Last() == '.') {
++        host.Truncate(host.Length() - 1);
++      }
++      aData.mHosts.AppendElement(std::move(host));
++    }
++    if (comma == kNotFound) {
++      break;
++    }
++    start = comma + 1;
++  }
++}
++
++void ParseCertificateLine(const nsACString& aLine, MatreshkaTrustData& aData) {
++  nsCString decoded;
++  if (NS_FAILED(Base64Decode(aLine, decoded)) || decoded.IsEmpty()) {
++    return;
++  }
++
++  nsTArray<uint8_t> der;
++  der.AppendElements(reinterpret_cast<const uint8_t*>(decoded.BeginReading()),
++                     decoded.Length());
++
++  Input certInput;
++  if (certInput.Init(der.Elements(), der.Length()) != Success) {
++    return;
++  }
++  BackCert cert(certInput, EndEntityOrCA::MustBeCA, nullptr);
++  if (cert.Init() != Success) {
++    return;
++  }
++
++  aData.mCerts.AppendElement(std::move(der));
++}
++
++already_AddRefed<MatreshkaTrustData> ParseTrustData(
++    const nsACString& aPrefValue) {
++  RefPtr<MatreshkaTrustData> data = new MatreshkaTrustData();
++
++  bool sawHostLine = false;
++  uint32_t start = 0;
++  while (start <= aPrefValue.Length()) {
++    int32_t newline = aPrefValue.FindChar('\n', start);
++    uint32_t end = newline == kNotFound ? aPrefValue.Length()
++                                        : static_cast<uint32_t>(newline);
++
++    nsCString line(Substring(aPrefValue, start, end - start));
++    TrimASCII(line);
++    if (!line.IsEmpty() && line.CharAt(0) != '#') {
++      if (!sawHostLine) {
++        ParseHostLine(line, *data);
++        sawHostLine = true;
++      } else {
++        ParseCertificateLine(line, *data);
++      }
++    }
++
++    if (newline == kNotFound) {
++      break;
++    }
++    start = end + 1;
++  }
++
++  return data.forget();
++}
++
++already_AddRefed<MatreshkaTrustData> GetTrustData() {
++  nsCString prefValue;
++  {
++    // matreshka.trust.json is a DataMutexString. Its getter returns a locked
++    // handle, which makes this read safe on the certificate verification
++    // thread. Copy the value while holding the lock and parse outside it.
++    auto prefLock = StaticPrefs::matreshka_trust_json();
++    prefValue = *prefLock;
++  }
++
++  StaticMutexAutoLock lock(sMatreshkaTrustMutex);
++  if (sMatreshkaTrustCachedData &&
++      sMatreshkaTrustCachedPref.Equals(prefValue)) {
++    return do_AddRef(sMatreshkaTrustCachedData.get());
++  }
++
++  RefPtr<MatreshkaTrustData> data = ParseTrustData(prefValue);
++  sMatreshkaTrustCachedPref = prefValue;
++  sMatreshkaTrustCachedData = data;
++  return data.forget();
++}
++
++bool HostMatches(const nsCString& aEntry, const nsCString& aHost) {
++  if (aEntry.IsEmpty()) {
++    return false;
++  }
++  if (aEntry.CharAt(0) == '.') {
++    return aHost.Length() > aEntry.Length() && StringEndsWith(aHost, aEntry);
++  }
++  return aHost.Equals(aEntry);
++}
++
++void NormalizeHost(const nsACString& aHost, nsCString& aHostOut) {
++  aHostOut.Assign(aHost);
++  TrimASCII(aHostOut);
++  ToLowerCase(aHostOut);
++  if (aHostOut.Length() > 1 && aHostOut.Last() == '.') {
++    aHostOut.Truncate(aHostOut.Length() - 1);
++  }
++}
++
++bool IsHostListed(const MatreshkaTrustData* aData, const nsACString& aHost) {
++  if (!aData || aData->mHosts.IsEmpty()) {
++    return false;
++  }
++
++  nsCString host;
++  NormalizeHost(aHost, host);
++
++  for (const auto& entry : aData->mHosts) {
++    if (HostMatches(entry, host)) {
++      return true;
++    }
++  }
++  return false;
++}
++
++// The .ru TLD and the punycode form of .рф.
++bool IsRussianTldHost(const nsACString& aHost) {
++  nsCString host;
++  NormalizeHost(aHost, host);
++  return StringEndsWith(host, ".ru"_ns) ||
++         StringEndsWith(host, ".xn--p1ai"_ns);
++}
++
++// Returns true when a host may use the bundled Russian Trusted CA
++// certificates: either it is explicitly allowlisted, or the .ru/.рф fallback
++// is enabled and the host is in one of those TLDs. The latter still requires
++// the presented chain to validate to one of the bundled roots; this function
++// never trusts arbitrary certificates.
++bool IsEligibleHost(const MatreshkaTrustData* aData, const nsACString& aHost) {
++  if (IsHostListed(aData, aHost)) {
++    return true;
++  }
++  return StaticPrefs::matreshka_trust_ru_fallback() && IsRussianTldHost(aHost);
++}
++
++}  // namespace
++
++bool IsMatreshkaListedHost(const nsACString& aHost) {
++  if (!StaticPrefs::matreshka_trust_enabled()) {
++    return false;
++  }
++  RefPtr<MatreshkaTrustData> data = GetTrustData();
++  return IsHostListed(data, aHost);
++}
++
++bool GetMatreshkaIssuerCandidates(
++    const nsACString& aHost, const mozilla::pkix::Input& aEncodedIssuerName,
++    nsTArray<nsTArray<uint8_t>>& aCandidateDERs) {
++  if (!StaticPrefs::matreshka_trust_enabled()) {
++    return false;
++  }
++
++  RefPtr<MatreshkaTrustData> data = GetTrustData();
++  if (!IsEligibleHost(data, aHost)) {
++    return false;
++  }
++
++  bool appended = false;
++  for (const auto& der : data->mCerts) {
++    Input certInput;
++    Result rv = certInput.Init(der.Elements(), der.Length());
++    if (rv != Success) {
++      continue;
++    }
++    BackCert cert(certInput, EndEntityOrCA::MustBeCA, nullptr);
++    if (cert.Init() != Success) {
++      continue;
++    }
++    if (!InputsAreEqual(aEncodedIssuerName, cert.GetSubject())) {
++      continue;
++    }
++    nsTArray<uint8_t> copy;
++    copy.AppendElements(der);
++    aCandidateDERs.AppendElement(std::move(copy));
++    appended = true;
++  }
++  return appended;
++}
++
++bool IsMatreshkaBundledTrustAnchor(
++    const nsACString& aHost, const mozilla::pkix::Input& aCandidateCertDER) {
++  if (!StaticPrefs::matreshka_trust_enabled()) {
++    return false;
++  }
++
++  RefPtr<MatreshkaTrustData> data = GetTrustData();
++  if (!IsEligibleHost(data, aHost)) {
++    return false;
++  }
++
++  for (const auto& der : data->mCerts) {
++    Input bundledInput;
++    if (bundledInput.Init(der.Elements(), der.Length()) != Success) {
++      continue;
++    }
++    if (InputsAreEqual(aCandidateCertDER, bundledInput)) {
++      return true;
++    }
++  }
++  return false;
++}
++
++}  // namespace psm
++}  // namespace mozilla
+diff --git a/security/manager/ssl/MatreshkaTrust.h b/security/manager/ssl/MatreshkaTrust.h
+new file mode 100644
+index 0000000..75a9374
+--- /dev/null
++++ b/security/manager/ssl/MatreshkaTrust.h
+@@ -0,0 +1,44 @@
++/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#ifndef mozilla_psm_MatreshkaTrust_h
++#define mozilla_psm_MatreshkaTrust_h
++
++#include <stdint.h>
++
++#include "mozpkix/pkixtypes.h"
++#include "nsString.h"
++#include "nsTArray.h"
++
++namespace mozilla {
++namespace psm {
++
++// Returns true when matreshka.trust.enabled is true and aHost is either an
++// exact entry in the bundle's host list or matches a ".suffix" entry. The
++// check is case-insensitive and a single trailing dot on aHost is ignored.
++bool IsMatreshkaListedHost(const nsACString& aHost);
++
++// For an allowlisted host, appends a copy of the DER bytes of every bundled
++// certificate whose subject matches aEncodedIssuerName. Returns true if at
++// least one candidate was appended.
++//
++// The certificate bytes are copied into aCandidateDERs so that callers can
++// create mozilla::pkix::Input objects that stay valid for the duration of
++// path building.
++bool GetMatreshkaIssuerCandidates(
++    const nsACString& aHost, const mozilla::pkix::Input& aEncodedIssuerName,
++    nsTArray<nsTArray<uint8_t>>& aCandidateDERs);
++
++// For an allowlisted host, returns true if aCandidateCertDER is byte-for-byte
++// identical to one of the certificates bundled in the trust data. Only these
++// exact certificates are promoted to trust anchors; nothing else is affected.
++bool IsMatreshkaBundledTrustAnchor(
++    const nsACString& aHost, const mozilla::pkix::Input& aCandidateCertDER);
++
++}  // namespace psm
++}  // namespace mozilla
++
++#endif  // mozilla_psm_MatreshkaTrust_h
+diff --git a/security/manager/ssl/moz.build b/security/manager/ssl/moz.build
+index 1aea028..44aa16d 100644
+--- a/security/manager/ssl/moz.build
++++ b/security/manager/ssl/moz.build
+@@ -104,6 +104,7 @@ UNIFIED_SOURCES += [
+     "FIPSUtils.cpp",
+     "IPCClientCertsChild.cpp",
+     "IPCClientCertsParent.cpp",
++    "MatreshkaTrust.cpp",
+     "md4.c",
+     "nsCertOverrideService.cpp",
+     "nsCertTree.cpp",
+@@ -151,7 +152,8 @@ SOURCE_HEADERS += [
+ SOURCE_HEADERS += [
+     "AppSignatureVerification.h",
+     "AppTrustDomain.h",
+     "ContentSignatureVerifier.h",
+     "DataStorageManager.h",
+     "FIPSUtils.h",
++    "MatreshkaTrust.h",
+     "md4.h",

@@ -1,0 +1,22 @@
+# Firefox source and build outputs
+gecko/
+obj-*/
+dist/
+*.apk
+*.aab
+*.idsig
+
+# Signing material
+*.jks
+*.keystore
+*.password
+release-keystore/
+
+# Gradle / IDE
+.gradle/
+build/
+.idea/
+local.properties
+
+# OS
+.DS_Store

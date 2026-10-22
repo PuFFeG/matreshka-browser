@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" role="img" aria-labelledby="title desc">
+  <title id="title">Архитектура matre$ka</title>
+  <desc id="desc">Fenix UI передаёт доверие через MatreshkaTrustBridge в пропатченный GeckoView; отдельный contextId=matreshka изолирует хранение российских сайтов.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#0e1728"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#f5a524"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="700" fill="url(#bg)"/>
+
+  <text x="50" y="56" fill="#f8fafc" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="26" font-weight="700">matre$ka / архитектура</text>
+  <text x="50" y="82" fill="#94a3b8" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="13">Fenix UI → слой Matreshka → пропатченный GeckoView</text>
+  <text x="1150" y="56" text-anchor="end" fill="#64748b" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12">Firefox 160.0a1 · BuildID 20261022001515</text>
+  <text x="1150" y="82" text-anchor="end" fill="#64748b" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12">ARM64 · minSdk 26 · MPL-2.0</text>
+  <line x1="50" y1="102" x2="1150" y2="102" stroke="#243047" stroke-width="1"/>
+
+  <text x="50" y="130" fill="#f5a524" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="2">FENIX</text>
+  <text x="400" y="130" fill="#f5a524" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="2">MATRESHKA</text>
+  <text x="770" y="130" fill="#f5a524" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="2">GECKOVIEW</text>
+
+  <g font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <!-- Fenix UI -->
+    <rect x="50" y="150" width="300" height="82" rx="12" fill="#111a2c" stroke="#2b3b55" stroke-width="1"/>
+    <text x="70" y="181" fill="#e6edf7" font-size="16" font-weight="600">Fenix UI</text>
+    <text x="70" y="203" fill="#94a3b8" font-size="12">поиск, вкладки, настройки, расширения</text>
+    <text x="70" y="219" fill="#94a3b8" font-size="12">DoH, QUIC, sync</text>
+
+    <!-- Toolbar middleware -->
+    <rect x="50" y="270" width="300" height="96" rx="12" fill="#111a2c" stroke="#2b3b55" stroke-width="1"/>
+    <text x="70" y="301" fill="#e6edf7" font-size="15" font-weight="600">BrowserToolbarMiddleware</text>
+    <text x="70" y="323" fill="#f5a524" font-size="14" font-weight="600">TrustWarning</text>
+    <text x="70" y="345" fill="#94a3b8" font-size="11">янтарный щит и объяснение для домена</text>
+    <text x="70" y="359" fill="#94a3b8" font-size="11">с сертификатом вне списка</text>
+
+    <!-- Storage middleware -->
+    <rect x="50" y="512" width="300" height="86" rx="12" fill="#111a2c" stroke="#8a5a12" stroke-opacity="0.8" stroke-width="1"/>
+    <text x="70" y="543" fill="#e6edf7" font-size="15" font-weight="600">MatreshkaStorageMiddleware</text>
+    <text x="70" y="565" fill="#94a3b8" font-size="11">устанавливается в Core до EngineMiddleware</text>
+    <text x="70" y="583" fill="#f5a524" font-size="12" font-weight="600">contextId = matreshka</text>
+
+    <!-- Trust asset -->
+    <rect x="400" y="150" width="300" height="82" rx="12" fill="#111a2c" stroke="#2b3b55" stroke-width="1"/>
+    <text x="420" y="181" fill="#e6edf7" font-size="16" font-weight="600">trust.json</text>
+    <text x="420" y="203" fill="#94a3b8" font-size="12">70 host-записей + 2 российских корня</text>
+    <text x="420" y="219" fill="#94a3b8" font-size="12">обновлён 2026-10-22</text>
+
+    <!-- Repository -->
+    <rect x="400" y="270" width="300" height="96" rx="12" fill="#111a2c" stroke="#2b3b55" stroke-width="1"/>
+    <text x="420" y="301" fill="#e6edf7" font-size="15" font-weight="600">TrustRepository / TrustConfig</text>
+    <text x="420" y="323" fill="#94a3b8" font-size="12">asset → remote → user</text>
+    <text x="420" y="345" fill="#94a3b8" font-size="11">нормализация IDN, HTTPS-импорт хостов</text>
+    <text x="420" y="359" fill="#94a3b8" font-size="11">корни остаются только в APK</text>
+
+    <!-- Bridge -->
+    <rect x="400" y="406" width="300" height="86" rx="12" fill="#111a2c" stroke="#8a5a12" stroke-opacity="0.8" stroke-width="1"/>
+    <text x="420" y="437" fill="#e6edf7" font-size="15" font-weight="600">MatreshkaTrustBridge</text>
+    <text x="420" y="459" fill="#94a3b8" font-size="11">reflection: applyToBuilder / applyToSettings</text>
+    <text x="420" y="477" fill="#94a3b8" font-size="11">stock GeckoView не ломает сборку</text>
+
+    <!-- Patched GeckoView container -->
+    <rect x="750" y="145" width="400" height="480" rx="16" fill="#0f1727" stroke="#334155" stroke-width="1"/>
+    <text x="770" y="174" fill="#e6edf7" font-size="16" font-weight="600">patched GeckoView</text>
+    <text x="770" y="194" fill="#94a3b8" font-size="11">GeckoRuntimeSettings · C++ certificate verifier</text>
+
+    <!-- Certificate verifier -->
+    <rect x="772" y="210" width="356" height="78" rx="10" fill="#111a2c" stroke="#2b3b55" stroke-width="1"/>
+    <text x="792" y="240" fill="#e6edf7" font-size="15" font-weight="600">Certificate verifier</text>
+    <text x="792" y="261" fill="#94a3b8" font-size="12">host-scoped trust bundle</text>
+    <text x="792" y="278" fill="#94a3b8" font-size="11">matreshka.trust.enabled</text>
+
+    <!-- Roots -->
+    <rect x="772" y="314" width="170" height="84" rx="10" fill="#111a2c" stroke="#8a5a12" stroke-opacity="0.8" stroke-width="1"/>
+    <text x="792" y="342" fill="#e6edf7" font-size="13" font-weight="600">Russian Trusted</text>
+    <text x="792" y="359" fill="#e6edf7" font-size="13" font-weight="600">roots (2)</text>
+    <text x="792" y="379" fill="#94a3b8" font-size="10">только для host из списка</text>
+
+    <!-- Fallback -->
+    <rect x="958" y="314" width="170" height="84" rx="10" fill="#111a2c" stroke="#8a5a12" stroke-opacity="0.8" stroke-width="1"/>
+    <text x="978" y="342" fill="#e6edf7" font-size="12" font-weight="600">.ru / .рф fallback</text>
+    <text x="978" y="361" fill="#f5a524" font-size="10">matreshka.trust.</text>
+    <text x="978" y="375" fill="#f5a524" font-size="10">ru_fallback</text>
+    <text x="978" y="391" fill="#94a3b8" font-size="10">только цепочки к этим корням</text>
+
+    <!-- Settings -->
+    <rect x="772" y="424" width="356" height="70" rx="10" fill="#111a2c" stroke="#2b3b55" stroke-width="1"/>
+    <text x="792" y="451" fill="#e6edf7" font-size="14" font-weight="600">GeckoRuntimeSettings</text>
+    <text x="792" y="472" fill="#94a3b8" font-size="11">matreshka.trust.json → prefs, переразбор на лету</text>
+
+    <!-- Storage partition -->
+    <rect x="772" y="520" width="356" height="76" rx="10" fill="#111a2c" stroke="#8a5a12" stroke-opacity="0.8" stroke-width="1"/>
+    <text x="792" y="547" fill="#e6edf7" font-size="14" font-weight="600">Storage partition</text>
+    <text x="792" y="567" fill="#f5a524" font-size="12" font-weight="600">contextId = matreshka</text>
+    <text x="792" y="584" fill="#94a3b8" font-size="10">cookies · localStorage · IndexedDB · service workers · storage</text>
+  </g>
+
+  <!-- Arrows -->
+  <g stroke="#f5a524" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+    <line x1="200" y1="232" x2="200" y2="266"/>
+    <line x1="550" y1="232" x2="550" y2="266"/>
+    <line x1="550" y1="366" x2="550" y2="402"/>
+    <line x1="350" y1="318" x2="396" y2="318"/>
+    <line x1="700" y1="449" x2="768" y2="449"/>
+    <line x1="350" y1="555" x2="768" y2="555"/>
+    <line x1="857" y1="424" x2="857" y2="400"/>
+    <line x1="1043" y1="424" x2="1043" y2="400"/>
+    <line x1="857" y1="314" x2="857" y2="290"/>
+    <line x1="1043" y1="314" x2="1043" y2="290"/>
+  </g>
+
+  <text x="710" y="441" fill="#94a3b8" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="10">reflection</text>
+  <text x="710" y="547" fill="#94a3b8" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="10">storage</text>
+
+  <text x="50" y="662" fill="#64748b" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11">Один GeckoRuntime и один физический cookies.sqlite. matreshka — это partition по originAttributes, а не второй профиль.</text>
+</svg>
