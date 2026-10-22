@@ -75,7 +75,7 @@
 
 - [Страница релизов](https://github.com/PuFFeG/matreshka-browser/releases)
 
-APK ещё не опубликован в GitHub Releases. Когда релиз появится, скачивайте APK и `SHA256SUMS` только с этой страницы.
+Релиз `v160.0a1`: [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/download/v160.0a1/matreshka-160.0a1-arm64-v8a-release.apk) · [SHA256SUMS](https://github.com/PuFFeG/matreshka-browser/releases/download/v160.0a1/SHA256SUMS). Скачивайте оба файла только со страницы [GitHub Releases](https://github.com/PuFFeG/matreshka-browser/releases/latest).
 
 | Параметр | Значение |
 | --- | --- |
@@ -85,7 +85,7 @@ APK ещё не опубликован в GitHub Releases. Когда релиз
 | База | Firefox/Fenix `160.0a1`, BuildID `20261022001515` |
 | Лицензия | MPL-2.0 |
 
-После публикации APK проверьте его подпись и контрольную сумму из того же релиза:
+Перед установкой проверьте подпись APK и контрольную сумму из того же релиза:
 
 ```sh
 apksigner verify --print-certs matreshka-160.0a1-arm64-v8a-release.apk
