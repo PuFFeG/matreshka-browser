@@ -9,6 +9,11 @@
     <img src="https://img.shields.io/badge/Firefox-160.0a1-FF7139?style=for-the-badge" alt="Firefox 160 base">
     <img src="https://img.shields.io/badge/License-MPL--2.0-4C9AFF?style=for-the-badge" alt="MPL-2.0">
   </p>
+  <p>
+    <a href="https://github.com/PuFFeG/matreshka-browser/releases/latest">
+      <img src="https://img.shields.io/badge/Download-ARM64%20APK-f5a524?style=for-the-badge" alt="Скачать ARM64 APK">
+    </a>
+  </p>
 </div>
 
 > **Независимый проект.** `matre$ka` не связан с Mozilla и не одобрен ею. Иллюстрации в README не являются скриншотами приложения.
@@ -67,8 +72,8 @@
 
 ## Установка
 
-- [Последний релиз](../../releases/latest)
-- [ARM64 APK](../../releases/latest/download/matreshka-160.0a1-arm64-v8a-release.apk)
+- [Последний релиз](https://github.com/PuFFeG/matreshka-browser/releases/latest)
+- [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/latest/download/matreshka-160.0a1-arm64-v8a-release.apk)
 
 | Параметр | Значение |
 | --- | --- |
