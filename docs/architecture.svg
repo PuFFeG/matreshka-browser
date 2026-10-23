@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" role="img" aria-labelledby="title desc">
-  <title id="title">Архитектура matre$ka</title>
+  <title id="title">Архитектура Matreshka Browser</title>
   <desc id="desc">Fenix UI передаёт доверие через MatreshkaTrustBridge в пропатченный GeckoView; отдельный contextId=matreshka изолирует хранение российских сайтов.</desc>
 
   <defs>
@@ -14,7 +14,7 @@
 
   <rect width="1200" height="700" fill="url(#bg)"/>
 
-  <text x="50" y="56" fill="#f8fafc" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="26" font-weight="700">matre$ka / архитектура</text>
+  <text x="50" y="56" fill="#f8fafc" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="26" font-weight="700">Matreshka Browser / архитектура</text>
   <text x="50" y="82" fill="#94a3b8" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="13">Fenix UI → слой Matreshka → пропатченный GeckoView</text>
   <text x="1150" y="56" text-anchor="end" fill="#64748b" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12">Firefox 160.0a1 · BuildID 20261022001515</text>
   <text x="1150" y="82" text-anchor="end" fill="#64748b" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12">ARM64 · minSdk 26 · MPL-2.0</text>
