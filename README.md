@@ -3,7 +3,7 @@
   <h1>Matreshka Browser</h1>
   <p><strong>Инженерный форк Firefox (Fenix) для Android, реализующий принцип наименьших привилегий (Least Privilege) при работе с национальными цепочками доверия.</strong></p>
   <p>Браузер обеспечивает изолированную работу с российскими веб-ресурсами и минимизирует площадь атаки (Attack Surface Reduction) за счёт строгого ограничения области действия корневых сертификатов.</p>
-  <p>Fenix / Firefox 160.0a1 · ARM64 · открытый патч-стек</p>
+  <p>Fenix / Firefox 160.0a1 · v0.2.0 · ARM64 · открытый патч-стек</p>
   <p>
     <img src="https://img.shields.io/badge/Android-8%2B%20%C2%B7%20minSdk%2026-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 8+">
     <img src="https://img.shields.io/badge/ABI-arm64--v8a-f5a524?style=for-the-badge" alt="ARM64">
@@ -77,10 +77,12 @@ Matreshka Browser — форк Fenix с открытым патч-стеком �
 
 - [Страница релизов](https://github.com/PuFFeG/matreshka-browser/releases)
 
-Релиз `v160.0a1`: [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/download/v160.0a1/matreshka-160.0a1-arm64-v8a-release.apk) · [SHA256SUMS](https://github.com/PuFFeG/matreshka-browser/releases/download/v160.0a1/SHA256SUMS). Скачивайте оба файла только со страницы [GitHub Releases](https://github.com/PuFFeG/matreshka-browser/releases/latest).
+Релиз `v0.2.0`: [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.0/matreshka-browser-0.2.0-arm64-v8a-release.apk) · [SHA256SUMS](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.0/SHA256SUMS). Скачивайте оба файла только со страницы [GitHub Releases](https://github.com/PuFFeG/matreshka-browser/releases/latest).
 
 | Параметр | Значение |
 | --- | --- |
+| Название | `matreshka-browser` |
+| Версия | `0.2.0` |
 | Android | 8.0+ (`minSdk 26`) |
 | ABI | `arm64-v8a` |
 | Package | `ru.matreshka.browser` |
@@ -90,7 +92,7 @@ Matreshka Browser — форк Fenix с открытым патч-стеком �
 Перед установкой проверьте подпись APK и контрольную сумму из того же релиза:
 
 ```sh
-apksigner verify --print-certs matreshka-160.0a1-arm64-v8a-release.apk
+apksigner verify --print-certs matreshka-browser-0.2.0-arm64-v8a-release.apk
 sha256sum -c SHA256SUMS
 ```
 
@@ -113,13 +115,13 @@ MOZCONFIG="$FIREFOX_SRC/mozconfig-arm64" ./scripts/build-release.sh "$FIREFOX_SR
 ```sh
 ./scripts/sign-apk.sh \
   "$FIREFOX_SRC/obj-aarch64-unknown-linux-android/gradle/build/mobile/android/fenix/app/outputs/apk/release/fenix-arm64-v8a-release.apk" \
-  "dist/matreshka-160.0a1-arm64-v8a-release.apk"
+  "dist/matreshka-browser-0.2.0-arm64-v8a-release.apk"
 ```
 
 Либо запустите полный цикл сборки и подготовки релиза:
 
 ```sh
-VERSION=160.0a1 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
+VERSION=0.2.0 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
 ```
 
 Для изменённого C++-кода GeckoView требуется полная сборка, не artifact mode. Ключ подписи хранится локально и не входит в репозиторий; его потеря помешает устанавливать обновления поверх текущей сборки. Дополнительные сведения — в [fenix/README.md](fenix/README.md).

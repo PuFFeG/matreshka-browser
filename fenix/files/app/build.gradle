@@ -50,8 +50,9 @@ android {
         applicationId "ru.matreshka.browser"
         minSdk config.minSdkVersion
         targetSdk config.targetSdkVersion
-        versionCode 1
-        versionName Config.generateDebugVersionName()
+        // MATRESHKA: public identity of the app.
+        versionCode 2
+        versionName "0.2.0"
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments clearPackageData: 'true'
@@ -109,7 +110,7 @@ android {
         debug {
             shrinkResources = false
             minifyEnabled = false
-            applicationIdSuffix ".debug"
+            // MATRESHKA: keep one package id for both local debug and release builds.
             resValue "bool", "IS_DEBUG", "true"
             pseudoLocalesEnabled = true
         }
@@ -291,7 +292,13 @@ androidComponents {
         // their buildConfigField. The legacy variant API exposed buildConfigFields on the build type
         // object so we could read the flag directly; onVariants only gives us the build type name, so
         // we gate on the names instead.
-        if (buildType in ['nightly', 'beta', 'release', 'benchmark']) {
+        if (buildType == 'release') {
+            // MATRESHKA: independent versioning; do not inherit Firefox/Fennec version names.
+            variant.outputs.each { output ->
+                output.versionName.set("0.2.0")
+                output.versionCode.set(2)
+            }
+        } else if (buildType in ['nightly', 'beta', 'benchmark']) {
             // The Google Play Store does not allow multiple APKs for the same app that all have the
             // same version code. Therefore we need to have different version codes for our ARM and x86
             // builds.

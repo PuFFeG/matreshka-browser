@@ -7,8 +7,11 @@ SRC="${1:-${FIREFOX_SRC:-}}"
 [ -x "$SRC/mach" ] || { echo "error: mach not found in $SRC" >&2; exit 1; }
 
 if [ -z "${JAVA_HOME:-}" ] && [ -d "$HOME/.mozbuild/jdk" ]; then
-    JAVA_HOME="$(find "$HOME/.mozbuild/jdk" -maxdepth 1 -mindepth 1 -type d | sort | tail -1)"
-    export JAVA_HOME
+    JAVA_BIN="$(find "$HOME/.mozbuild/jdk" -mindepth 3 -maxdepth 3 -type f -path '*/bin/java' | sort | tail -1)"
+    if [ -n "$JAVA_BIN" ]; then
+        JAVA_HOME="$(dirname "$(dirname "$JAVA_BIN")")"
+        export JAVA_HOME
+    fi
 fi
 export MOZCONFIG="${MOZCONFIG:-$SRC/mozconfig-arm64}"
 

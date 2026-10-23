@@ -1,6 +1,6 @@
 # Fenix integration
 
-This directory contains the Fenix-side part of `matre$ka`, applied on top of a Firefox source
+This directory contains the Fenix-side part of Matreshka Browser, applied on top of a Firefox source
 tree at `mobile/android/fenix`.
 
 ## What it changes
@@ -16,7 +16,7 @@ tree at `mobile/android/fenix`.
   dialog and a shortcut to the list.
 - `SettingsFragment.kt` + `preferences.xml`: “Список сайтов Минцифры” under Advanced.
 - `AndroidManifest.xml`: non-exported `MatreshkaSitesActivity`.
-- `static_strings.xml`: Russian UI strings and the `matre$ka` app name.
+- `static_strings.xml`: Russian UI strings and the `matreshka-browser` app name.
 - `app/build.gradle`: release ships as `ru.matreshka.browser` without the `.firefox` suffix
   or Mozilla's `sharedUserId`.
 - `app/src/release/...`: release app name and manifest overrides.
@@ -67,11 +67,11 @@ obj-aarch64-unknown-linux-android/gradle/build/mobile/android/fenix/app/outputs/
 ```
 
 Signing and the release flow are in [`../scripts/`](../scripts/). The release APK is
-`ru.matreshka.browser`, minSdk 26, native `arm64-v8a`.
+`ru.matreshka.browser`, version 0.2.0, minSdk 26, native `arm64-v8a`.
 
 ## Verified
 
-- App starts as `matre$ka`; address bar search and suggestions work.
+- App starts as `matreshka-browser`; address bar search and suggestions work.
 - `sberbank.ru` loads through the listed Russian Trusted chain.
 - `expobank.ru` loads through the `.ru` fallback and shows “Сертификат Минцифры: домен вне
   списка”; tapping the shield opens the dialog.
