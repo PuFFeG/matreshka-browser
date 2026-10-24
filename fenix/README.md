@@ -18,7 +18,7 @@ tree at `mobile/android/fenix`.
 - `AndroidManifest.xml`: non-exported `MatreshkaSitesActivity`.
 - `static_strings.xml`: Russian UI strings and the `matreshka-browser` app name.
 - `app/build.gradle`: release ships as `ru.matreshka.browser` without the `.firefox` suffix
-  or Mozilla's `sharedUserId`.
+  or Mozilla's `sharedUserId`; third-party telemetry/crash SDKs are removed by patches.
 - `app/src/release/...`: release app name and manifest overrides.
 - `Settings.kt`: translation pop-up is off by default; DoH settings stay visible without
   waiting for Nimbus.
@@ -26,6 +26,9 @@ tree at `mobile/android/fenix`.
 The core trust patch lives in [`../patches/core/`](../patches/core/), not here. It adds
 `matreshka.trust.enabled`, `matreshka.trust.ru_fallback` and `matreshka.trust.json`, plus the
 C++ verification hook.
+
+Telemetry and crash-SDK removals live in [`../patches/fenix/`](../patches/fenix/); they are
+applied after the overlay by `scripts/apply-fenix-patches.sh`.
 
 ## Apply
 
@@ -67,7 +70,7 @@ obj-aarch64-unknown-linux-android/gradle/build/mobile/android/fenix/app/outputs/
 ```
 
 Signing and the release flow are in [`../scripts/`](../scripts/). The release APK is
-`ru.matreshka.browser`, version 0.2.0, minSdk 26, native `arm64-v8a`.
+`ru.matreshka.browser`, version 0.2.1, minSdk 26, native `arm64-v8a`.
 
 ## Verified
 
@@ -90,7 +93,8 @@ Signing and the release flow are in [`../scripts/`](../scripts/). The release AP
 - `contextId` is fixed when the session is created; a non-blank tab that later navigates to a
   Russian host stays in its original partition. Custom tabs are not partitioned.
 - HTTP cache, site permissions and the profile remain shared.
-- Telemetry/Nimbus/Adjust/Sentry and some Mozilla branding are still present in the current
-  release.
+- Sentry, Adjust and Firebase Messaging are removed and Glean upload is disabled in these
+  sources. Mozilla Socorro crash reporting, Nimbus/Remote Settings and some Mozilla branding
+  remain.
 - No GOST TLS. The `.ru`/`.рф` fallback only accepts chains rooted in the two bundled roots.
 - The ARM64 APK has been tested on a physical ARM64 device.

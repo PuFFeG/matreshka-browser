@@ -51,8 +51,8 @@ android {
         minSdk config.minSdkVersion
         targetSdk config.targetSdkVersion
         // MATRESHKA: public identity of the app.
-        versionCode 2
-        versionName "0.2.0"
+        versionCode 2016191883
+        versionName "0.2.1"
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments clearPackageData: 'true'
@@ -295,8 +295,8 @@ androidComponents {
         if (buildType == 'release') {
             // MATRESHKA: independent versioning; do not inherit Firefox/Fennec version names.
             variant.outputs.each { output ->
-                output.versionName.set("0.2.0")
-                output.versionCode.set(2)
+                output.versionName.set("0.2.1")
+                output.versionCode.set(2016191883)
             }
         } else if (buildType in ['nightly', 'beta', 'benchmark']) {
             // The Google Play Store does not allow multiple APKs for the same app that all have the

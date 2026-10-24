@@ -1,9 +1,9 @@
 <div align="center">
-  <img src="docs/images/hero.png" alt="Коробка с надписями «Сертификаты» и «Доверенные сертификаты» с матрёшкой" width="900">
+  <img src="docs/images/hero.jpg" alt="Коробка с матрёшкой и надписью «Доверие по списку»" width="900">
   <h1>Matreshka Browser</h1>
   <p><strong>Инженерный форк Firefox (Fenix) для Android, реализующий принцип наименьших привилегий (Least Privilege) при работе с национальными цепочками доверия.</strong></p>
   <p>Браузер обеспечивает изолированную работу с российскими веб-ресурсами и минимизирует площадь атаки (Attack Surface Reduction) за счёт строгого ограничения области действия корневых сертификатов.</p>
-  <p>Fenix / Firefox 160.0a1 · v0.2.0 · ARM64 · открытый патч-стек</p>
+  <p>Fenix / Firefox 160.0a1 · v0.2.1 · ARM64 · открытый патч-стек</p>
   <p>
     <img src="https://img.shields.io/badge/Android-8%2B%20%C2%B7%20minSdk%2026-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 8+">
     <img src="https://img.shields.io/badge/ABI-arm64--v8a-f5a524?style=for-the-badge" alt="ARM64">
@@ -27,7 +27,7 @@ Matreshka Browser — форк Fenix с открытым патч-стеком �
 
 ## Возможности
 
-| <img src="docs/images/feature-trust.png" width="220" alt="Символ доверия: ключ и замок"> | <img src="docs/images/feature-warning.png" width="220" alt="Янтарный щит предупреждения"> | <img src="docs/images/feature-isolation.png" width="220" alt="Два раздельных хранилища данных"> |
+| <img src="docs/images/feature-trust.jpg" width="220" alt="Символ доверия: ключ и замок"> | <img src="docs/images/feature-warning.jpg" width="220" alt="Янтарный щит предупреждения"> | <img src="docs/images/feature-isolation.jpg" width="220" alt="Два раздельных хранилища данных"> |
 | :---: | :---: | :---: |
 | **Доверие по списку.** Дополнительное доверие включается только для явно перечисленных хостов. Корни и базовый список поставляются в APK; удалённое обновление по HTTPS добавляет лишь хосты. | **Понятное предупреждение.** Янтарный индикатор показывает домен вне списка или устаревший список; он не оценивает репутацию сайта. | **Отдельный контекст.** Новые вкладки на хостах российского trust-слоя получают `contextId=matreshka`. Это разделение внутри одного GeckoRuntime. |
 
@@ -35,7 +35,7 @@ Matreshka Browser — форк Fenix с открытым патч-стеком �
 
 **Возможности Fenix:** поиск, настройки, история, закладки, расширения, синхронизация и DoH. QUIC/HTTP/3 включён; автоматический переводной pop-up по умолчанию выключен.
 
-Файл [social-preview.png](docs/images/social-preview.png) предназначен для поля **Social preview** в настройках репозитория GitHub.
+Файл [social-preview.jpg](docs/images/social-preview.jpg) предназначен для поля **Social preview** в настройках репозитория GitHub.
 
 ## Архитектура
 
@@ -77,12 +77,12 @@ Matreshka Browser — форк Fenix с открытым патч-стеком �
 
 - [Страница релизов](https://github.com/PuFFeG/matreshka-browser/releases)
 
-Релиз `v0.2.0`: [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.0/matreshka-browser-0.2.0-arm64-v8a-release.apk) · [SHA256SUMS](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.0/SHA256SUMS). Скачивайте оба файла только со страницы [GitHub Releases](https://github.com/PuFFeG/matreshka-browser/releases/latest).
+Релиз `v0.2.1`: [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.1/matreshka-browser-0.2.1-arm64-v8a-release.apk) · [SHA256SUMS](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.1/SHA256SUMS). Скачивайте оба файла только со страницы [GitHub Releases](https://github.com/PuFFeG/matreshka-browser/releases/latest).
 
 | Параметр | Значение |
 | --- | --- |
 | Название | `matreshka-browser` |
-| Версия | `0.2.0` |
+| Версия | `0.2.1` (`versionCode 2016191883`) |
 | Android | 8.0+ (`minSdk 26`) |
 | ABI | `arm64-v8a` |
 | Package | `ru.matreshka.browser` |
@@ -92,7 +92,7 @@ Matreshka Browser — форк Fenix с открытым патч-стеком �
 Перед установкой проверьте подпись APK и контрольную сумму из того же релиза:
 
 ```sh
-apksigner verify --print-certs matreshka-browser-0.2.0-arm64-v8a-release.apk
+apksigner verify --print-certs matreshka-browser-0.2.1-arm64-v8a-release.apk
 sha256sum -c SHA256SUMS
 ```
 
@@ -115,16 +115,20 @@ MOZCONFIG="$FIREFOX_SRC/mozconfig-arm64" ./scripts/build-release.sh "$FIREFOX_SR
 ```sh
 ./scripts/sign-apk.sh \
   "$FIREFOX_SRC/obj-aarch64-unknown-linux-android/gradle/build/mobile/android/fenix/app/outputs/apk/release/fenix-arm64-v8a-release.apk" \
-  "dist/matreshka-browser-0.2.0-arm64-v8a-release.apk"
+  "dist/matreshka-browser-0.2.1-arm64-v8a-release.apk"
 ```
 
 Либо запустите полный цикл сборки и подготовки релиза:
 
 ```sh
-VERSION=0.2.0 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
+VERSION=0.2.1 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
 ```
 
 Для изменённого C++-кода GeckoView требуется полная сборка, не artifact mode. Ключ подписи хранится локально и не входит в репозиторий; его потеря помешает устанавливать обновления поверх текущей сборки. Дополнительные сведения — в [fenix/README.md](fenix/README.md).
+
+## Телеметрия и сеть
+
+В 0.2.1 удалены Sentry, Adjust и Firebase Messaging. Загрузка Glean отключена на уровне SDK, телеметрия по умолчанию выключена. Leanplum и Crashlytics в базе Fenix 160.0a1 отсутствуют. Socorro crash reporting и Nimbus/Remote Settings Mozilla остаются.
 
 ## Безопасность и ограничения
 
@@ -135,7 +139,7 @@ VERSION=0.2.0 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
 - Удалённый список не может обновлять корневые сертификаты. Они обновляются только вместе с APK.
 - Storage-контекст не разделяет HTTP cache, permissions и другие данные из таблицы выше.
 - APK пока устанавливается и обновляется вручную. Сборка ARM64 проверена на устройстве.
-- В релизе могут оставаться компоненты телеметрии и строки/иконки Mozilla; сверяйтесь с исходниками и конфигурацией конкретной сборки.
+- В опубликованном 0.2.0 могут оставаться компоненты телеметрии и строки/иконки Mozilla. В исходниках 0.2.1 удалены Sentry, Adjust и Firebase Messaging, а загрузка Glean отключена; Socorro и Nimbus Mozilla остаются.
 
 Сообщения об уязвимостях и проблемах безопасности направляйте владельцам репозитория приватным способом, если такой канал указан в настройках проекта.
 
@@ -147,4 +151,4 @@ Mozilla, Firefox и соответствующие логотипы — това
 
 ## Разработка проекта
 
-Патч ядра находится в `patches/core/matreshka-trust.patch`; изменения Fenix — в `fenix/files/`. Перед обновлением базы проверьте применимость патча, соберите ARM64-релиз и протестируйте сценарии доверия, предупреждения и хранения данных.
+Патч ядра находится в `patches/core/matreshka-trust.patch`; изменения Fenix — в `fenix/files/` и упорядоченных патчах `patches/fenix/`. Перед обновлением базы проверьте применимость патча, соберите ARM64-релиз и протестируйте сценарии доверия, предупреждения и хранения данных.

@@ -1,0 +1,1408 @@
+diff --git a/mobile/android/fenix/app/build.gradle b/mobile/android/fenix/app/build.gradle
+--- a/mobile/android/fenix/app/build.gradle
++++ b/mobile/android/fenix/app/build.gradle
+@@ -348,24 +348,10 @@
+     buildConfigField 'boolean', 'CRASH_REPORTING', 'true'
+     buildConfigField 'boolean', 'TELEMETRY', 'true'
+ 
+-    // Reading the sentry token from a local file (if it exists). In a release task on taskcluster it will be available.
+-    buildConfigField 'String', 'SENTRY_TOKEN', 'null'
+-    try {
+-        def token = new File("${rootDir}/.sentry_token").text.trim()
+-        buildConfigField 'String', 'SENTRY_TOKEN', '"' + token + '"'
+-    } catch (FileNotFoundException ignored) {}
+-
+     // Setting buildDate with every build ID changes the generated BuildConfig and slows down the
+     // build, so debug builds (overridden below) use a fixed string instead.
+     def buildDate = LocalDateTime.parse(getBuildId(gradle.mozconfig.topobjdir, providers.environmentVariable("MOZ_BUILD_DATE").getOrNull()), DateTimeFormatter.ofPattern("yyyyMMddHHmmss")).toString()
+     buildConfigField 'String', 'BUILD_DATE', '"' + buildDate + '"'
+-
+-    try {
+-        def token = new File("${rootDir}/.adjust_token").text.trim()
+-        buildConfigField 'String', 'ADJUST_TOKEN', '"' + token + '"'
+-    } catch (FileNotFoundException ignored) {
+-        buildConfigField 'String', 'ADJUST_TOKEN', 'null'
+-    }
+ 
+     try {
+         def url = new File("${rootDir}/.nimbus").text.trim()
+@@ -417,8 +403,6 @@
+     buildConfigField 'boolean', 'CRASH_REPORTING', 'false'
+     buildConfigField 'boolean', 'TELEMETRY', 'false'
+     buildConfigField 'String', 'BUILD_DATE', '"debug build"'
+-    buildConfigField 'String', 'SENTRY_TOKEN', 'null'
+-    buildConfigField 'String', 'ADJUST_TOKEN', 'null'
+ 
+     if (gradle.hasProperty("localProperties.nimbus.remote-settings.url")) {
+         def url = gradle.getProperty("localProperties.nimbus.remote-settings.url")
+@@ -570,9 +554,7 @@
+     implementation project(':components:lib-bookmark-parser-jsoup')
+     implementation project(':components:lib-passwords-file')
+     implementation project(':components:lib-crash')
+-    implementation project(':components:lib-crash-sentry')
+     implementation project(':components:lib-dataprotect')
+-    implementation project(':components:lib-push-firebase')
+     implementation project(':components:lib-state')
+     implementation project(':components:lib-accelerometer-sensormanager')
+     implementation project(':components:lib-integrity-googleplay')
+@@ -583,7 +565,6 @@
+     implementation ComponentsDependencies.mozilla_appservices_syncmanager
+ 
+     implementation libs.accompanist.drawablepainter
+-    implementation libs.adjust
+     implementation libs.androidx.activity
+     implementation libs.androidx.annotation
+     implementation libs.androidx.appcompat
+@@ -634,13 +615,13 @@
+     implementation libs.google.material
+     implementation libs.installreferrer
+     implementation libs.kotlinx.coroutines
++    implementation libs.kotlinx.coroutines.play.services
+     implementation libs.kotlinx.serialization.json
+     implementation libs.mozilla.glean
+     implementation libs.play.review
+     implementation libs.play.review.ktx
+     implementation libs.play.services.ads.id
+     implementation libs.protobuf.javalite
+-    implementation libs.sentry
+     implementation libs.androidx.documentfile
+     implementation libs.zxing
+ 
+diff --git a/mobile/android/fenix/app/src/main/AndroidManifest.xml b/mobile/android/fenix/app/src/main/AndroidManifest.xml
+--- a/mobile/android/fenix/app/src/main/AndroidManifest.xml
++++ b/mobile/android/fenix/app/src/main/AndroidManifest.xml
+@@ -54,10 +54,6 @@
+     <!-- Needed to support Credential Manager with Android 14 and later. -->
+     <uses-permission android:name="android.permission.CREDENTIAL_MANAGER_SET_ORIGIN" />
+     <uses-permission android:name="android.permission.CREDENTIAL_MANAGER_QUERY_CANDIDATE_CREDENTIALS" />
+-
+-    <!-- Needed to get distribution information from partners.
+-    This is NOT required for the adjust plugin. -->
+-    <uses-permission android:name="com.adjust.preinstall.READ_PERMISSION"/>
+ 
+     <uses-permission android:name="${applicationId}.permission.PROFILER_INTERNAL" />
+ 
+@@ -840,14 +836,6 @@
+             android:exported="false" />
+ 
+         <service
+-            android:name=".push.FirebasePushService"
+-            android:exported="false">
+-            <intent-filter>
+-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+-            </intent-filter>
+-        </service>
+-
+-        <service
+             android:name=".perf.ProfilerService"
+             android:foregroundServiceType="specialUse"
+             android:exported="false">
+@@ -873,15 +861,6 @@
+             android:readPermission="android.permission.DUMP"
+             android:grantUriPermissions="false" />
+ 
+-        <meta-data
+-            android:name="firebase_messaging_auto_init_enabled"
+-            android:value="true" />
+-        <meta-data
+-            android:name="firebase_analytics_collection_enabled"
+-            android:value="false" />
+-        <meta-data
+-            android:name="firebase_analytics_collection_deactivated"
+-            android:value="true" />
+         <!-- Removes the default Workmanager  initialization so that we can use on-demand initializer. -->
+         <provider
+             android:name="androidx.startup.InitializationProvider"
+@@ -914,17 +893,6 @@
+                 android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                 tools:node="remove" />
+         </provider>
+-
+-        <!-- For adjust pre-installs -->
+-        <!-- https://dev.adjust.com/en/sdk/android/setup/preinstalled#system-installer-receiver-->
+-        <receiver
+-            android:name="com.adjust.sdk.AdjustPreinstallReferrerReceiver"
+-            android:exported="true"
+-            tools:ignore="ExportedReceiver">
+-            <intent-filter>
+-                <action android:name="com.attribution.SYSTEM_INSTALLER_REFERRER" />
+-            </intent-filter>
+-        </receiver>
+ 
+         <receiver android:name="org.mozilla.fenix.components.share.SaveToPdfReceiver"
+             android:exported="false">
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt
+@@ -4,7 +4,6 @@
+ 
+ package org.mozilla.fenix.components
+ 
+-import android.app.Application
+ import android.app.PendingIntent
+ import android.content.Context
+ import android.content.Intent
+@@ -14,22 +13,16 @@
+ import mozilla.components.lib.crash.runtimetagproviders.EnvironmentRuntimeProvider
+ import mozilla.components.lib.crash.runtimetagproviders.ExperimentDataRuntimeTagProvider
+ import mozilla.components.lib.crash.runtimetagproviders.VersionInfoProvider
+-import mozilla.components.lib.crash.sentry.SentryService
+-import mozilla.components.lib.crash.sentry.eventprocessors.CrashMetadataEventProcessor
+ import mozilla.components.lib.crash.service.CrashReporterService
+ import mozilla.components.lib.crash.service.GleanCrashReporterService
+ import mozilla.components.lib.crash.service.socorro.MozillaSocorroService
+ import mozilla.components.lib.crash.store.CrashReportOption
+-import mozilla.components.support.ktx.android.content.isMainProcess
+ import mozilla.components.support.utils.Browsers
+ import mozilla.components.support.utils.RunWhenReadyQueue
+ import mozilla.components.support.utils.ext.packageManagerCompatHelper
+-import org.mozilla.fenix.BuildConfig
+ import org.mozilla.fenix.Config
+ import org.mozilla.fenix.HomeActivity
+ import org.mozilla.fenix.R
+-import org.mozilla.fenix.ReleaseChannel
+-import org.mozilla.fenix.components.metrics.AdjustMetricsService
+ import org.mozilla.fenix.components.metrics.DefaultMetricsStorage
+ import org.mozilla.fenix.components.metrics.FirstSessionMetricsService
+ import org.mozilla.fenix.components.metrics.GleanMetricsService
+@@ -60,34 +53,6 @@
+     val crashReporter: CrashReporter by lazyMonitored {
+         val services = mutableListOf<CrashReporterService>()
+         val distributionId = "Mozilla"
+-
+-        if (isSentryEnabled()) {
+-            val sentryService =
+-                SentryService(
+-                    context,
+-                    BuildConfig.SENTRY_TOKEN,
+-                    tags =
+-                        mapOf(
+-                            "geckoview" to "$MOZ_APP_VERSION-$MOZ_APP_BUILDID",
+-                            "fenix.git" to BuildConfig.VCS_HASH,
+-                        ),
+-                    environment = BuildConfig.BUILD_TYPE,
+-                    sendEventForNativeCrashes = false, // Do not send native crashes to Sentry
+-                    // Do not send diagnostic logs until we have a better way to toggle this from user settings.
+-                    sendCaughtExceptions = false,
+-                    sentryProjectUrl = getSentryProjectUrl(),
+-                    crashMetadataEventProcessor = CrashMetadataEventProcessor(),
+-                )
+-
+-            // We only want to initialize Sentry on startup on the main process.
+-            if (context.isMainProcess()) {
+-                runWhenReadyQueue.runIfReadyOrQueue {
+-                    sentryService.initIfNeeded()
+-                }
+-            }
+-
+-            services.add(sentryService)
+-        }
+ 
+         // The name "Fenix" here matches the product name on Socorro and is unrelated to the actual app name:
+         // https://bugzilla.mozilla.org/show_bug.cgi?id=1523284
+@@ -178,11 +143,6 @@
+         MetricController.create(
+             listOf(
+                 GleanMetricsService(context),
+-                AdjustMetricsService(
+-                    application = context as Application,
+-                    storage = metricsStorage,
+-                    crashReporter = crashReporter,
+-                ),
+                 FirstSessionMetricsService(context),
+                 InstallReferrerMetricsService(context, settings),
+                 GleanUsageReportingMetricsService(gleanProfileIdStore = GleanProfileIdPreferenceStore(context)),
+@@ -197,18 +157,6 @@
+     }
+ }
+ 
+-private fun isSentryEnabled() = !BuildConfig.SENTRY_TOKEN.isNullOrEmpty()
+-
+-private fun getSentryProjectUrl(): String? {
+-    val baseUrl = "https://sentry.io/organizations/mozilla/issues"
+-    return when (Config.channel) {
+-        ReleaseChannel.Nightly -> "$baseUrl/?project=6295546"
+-        ReleaseChannel.Release -> "$baseUrl/?project=6375561"
+-        ReleaseChannel.Beta -> "$baseUrl/?project=6295551"
+-        else -> null
+-    }
+-}
+-
+ private val Context.versionInfoProvider: VersionInfoProvider
+     get() {
+         val packageInfo =
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Push.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Push.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Push.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Push.kt
+@@ -4,65 +4,15 @@
+ 
+ package org.mozilla.fenix.components
+ 
+-import android.annotation.SuppressLint
+ import android.content.Context
+-import androidx.core.net.toUri
+ import mozilla.components.feature.push.AutoPushFeature
+-import mozilla.components.feature.push.Protocol
+-import mozilla.components.feature.push.PushConfig
+ import mozilla.components.lib.crash.CrashReporter
+-import mozilla.components.support.base.log.logger.Logger
+-import org.mozilla.fenix.R
+-import org.mozilla.fenix.ext.components
+-import org.mozilla.fenix.perf.lazyMonitored
+-import org.mozilla.fenix.push.FirebasePushService
+ 
+ /**
+- * Component group for push services. These components use services that strongly depend on push messaging (e.g.
+- * WebPush, SendTab).
++ * Component group for push services.
++ *
++ * Matreshka intentionally ships without Firebase Messaging, so push is disabled.
+  */
+ class Push(val context: Context, crashReporter: CrashReporter) {
+-    val feature by lazyMonitored {
+-        pushConfig?.let { config ->
+-            AutoPushFeature(
+-                context = context,
+-                service = pushService,
+-                config = config,
+-                crashReporter = crashReporter,
+-            )
+-        }
+-    }
+-
+-    private val pushConfig: PushConfig? by lazyMonitored {
+-        val logger = Logger("PushConfig")
+-        val projectIdKey = context.getString(R.string.pref_key_push_project_id)
+-        @SuppressLint("DiscouragedApi")
+-        val resId = context.resources.getIdentifier(projectIdKey, "string", context.packageName)
+-        if (resId == 0) {
+-            logger.warn("No firebase configuration found; cannot support push service.")
+-            return@lazyMonitored null
+-        }
+-
+-        logger.debug("Creating push configuration for autopush.")
+-        val projectId = context.resources.getString(resId)
+-        val serverOverride = context.components.settings.overridePushServer
+-        if (serverOverride.isEmpty()) {
+-            PushConfig(projectId)
+-        } else {
+-            val uri = serverOverride.toUri()
+-            PushConfig(
+-                projectId,
+-                serverHost = uri.getHost() ?: "",
+-                protocol =
+-                    if (uri.getScheme() == "http") {
+-                        Protocol.HTTP
+-                    } else {
+-                        // Treat any non "http" value as HTTPS, since those are the only 2 options.
+-                        Protocol.HTTPS
+-                    },
+-            )
+-        }
+-    }
+-
+-    private val pushService by lazyMonitored { FirebasePushService() }
++    val feature: AutoPushFeature? = null
+ }
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/FenixApplication.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/FenixApplication.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/FenixApplication.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/FenixApplication.kt
+@@ -429,10 +429,6 @@
+                         components.settings.hasMadeMarketingTelemetrySelection,
+                 isDailyUsagePingEnabled = components.settings.isDailyUsagePingEnabled,
+             )
+-        } else {
+-            CoroutineScope(IO).launch {
+-                components.distributionIdManager.startAdjustIfSkippingConsentScreen()
+-            }
+         }
+ 
+         setupPush()
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/InstallReferrerHandlingService.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/InstallReferrerHandlingService.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/InstallReferrerHandlingService.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/InstallReferrerHandlingService.kt
+@@ -91,9 +91,6 @@
+                                 distributionIdManager.updateDistributionIdFromUtmParams(
+                                     UTMParams.parseUTMParameters(installReferrerResponse)
+                                 )
+-                                scope.launch {
+-                                    distributionIdManager.startAdjustIfSkippingConsentScreen()
+-                                }
+                             }
+ 
+                             scope.launch {
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustMetricsService.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustMetricsService.kt
+deleted file mode 100644
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustMetricsService.kt
++++ /dev/null
+@@ -1,322 +0,0 @@
+-/* This Source Code Form is subject to the terms of the Mozilla Public
+- * License, v. 2.0. If a copy of the MPL was not distributed with this
+- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+-
+-package org.mozilla.fenix.components.metrics
+-
+-import android.app.Application
+-import androidx.annotation.VisibleForTesting
+-import com.adjust.sdk.AdjustConfig
+-import com.adjust.sdk.AdjustEvent
+-import com.adjust.sdk.Constants.ADJUST_PREINSTALL_SYSTEM_PROPERTY_PATH
+-import com.adjust.sdk.LogLevel
+-import kotlinx.coroutines.CoroutineDispatcher
+-import kotlinx.coroutines.CoroutineScope
+-import kotlinx.coroutines.Dispatchers
+-import kotlinx.coroutines.launch
+-import kotlinx.coroutines.sync.Mutex
+-import kotlinx.coroutines.sync.withLock
+-import mozilla.components.lib.crash.CrashReporter
+-import mozilla.components.support.base.log.logger.Logger
+-import org.mozilla.fenix.BuildConfig
+-import org.mozilla.fenix.Config
+-import org.mozilla.fenix.GleanMetrics.AdjustAttribution
+-import org.mozilla.fenix.GleanMetrics.Pings
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.AURA_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.DYNAMIC_CALLBACK_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.GOOGLE_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.META_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.MOLOCO_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.REDDIT_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.TIKTOK_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.X_TWITTER_PARTNER_ID
+-import org.mozilla.fenix.distributions.DistributionAdjustStartupStrategy
+-import org.mozilla.fenix.distributions.DistributionIdManager
+-import org.mozilla.fenix.ext.components
+-import org.mozilla.fenix.utils.Settings
+-
+-class AdjustMetricsService(
+-    private val application: Application,
+-    private val storage: MetricsStorage,
+-    private val crashReporter: CrashReporter,
+-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+-    private val adjustSdk: AdjustSdkController = DefaultAdjustSdkController(),
+-    private val adjustToken: String? = BuildConfig.ADJUST_TOKEN,
+-    private val thirdPartySharingController: ThirdPartySharingController = AdjustThirdPartySharingController(),
+-) : MetricsService {
+-    override val type = MetricServiceType.Marketing
+-    private val logger = Logger("AdjustMetricsService")
+-
+-    private val initMutex = Mutex()
+-
+-    @Volatile private var initialized = false
+-
+-    override fun start() {
+-        logger.info("Started")
+-
+-        CoroutineScope(dispatcher).launch {
+-            val settings = application.components.settings
+-
+-            // Start Adjust to report attribution the first time the user accepts marketing.
+-            // Once attribution is known there is nothing to report, so leave Adjust dormant.
+-            if (!alreadyKnown(settings)) {
+-                ensureInitialized(settings)
+-            }
+-        }
+-    }
+-
+-    override fun stop() {
+-        logger.info("Stopped")
+-
+-        // Persist the forget-me synchronously (durable), then init Adjust to flush it.
+-        // No attribution listener: opting out must not record attribution.
+-        adjustSdk.gdprForgetMe(application.applicationContext)
+-        CoroutineScope(dispatcher).launch {
+-            ensureInitialized(application.components.settings, shouldRegisterAttributionListener = false)
+-        }
+-    }
+-
+-    @Suppress("TooGenericExceptionCaught")
+-    override fun track(event: Event) {
+-        logger.info("Track")
+-
+-        CoroutineScope(dispatcher).launch {
+-            try {
+-                val tokenName =
+-                    when (event) {
+-                        is Event.GrowthData -> event.tokenName
+-                        is Event.FirstWeekPostInstall -> event.tokenName
+-                    }
+-
+-                if ((event is Event.GrowthData || event is Event.FirstWeekPostInstall) && storage.shouldTrack(event)) {
+-                    ensureInitialized(application.components.settings)
+-                    adjustSdk.trackEvent(AdjustEvent(tokenName))
+-                    storage.updateSentState(event)
+-                    sendGleanEventAndPing(event)
+-                    logger.info("Update sent state $event")
+-                }
+-            } catch (e: Exception) {
+-                crashReporter.submitCaughtException(e)
+-                logger.info("Track threw an exception for $event")
+-            }
+-        }
+-    }
+-
+-    // Initializes Adjust once per process (initMutex guards concurrent callers). Pass
+-    // shouldRegisterAttributionListener = false on opt-out so init never records attribution.
+-    private suspend fun ensureInitialized(settings: Settings, shouldRegisterAttributionListener: Boolean = true) {
+-        if (initialized) {
+-            return
+-        }
+-
+-        initMutex.withLock {
+-            if (initialized) {
+-                return
+-            }
+-
+-            val token = adjustToken
+-            if (token.isNullOrBlank()) {
+-                logger.info("No adjust token defined")
+-
+-                if (Config.channel.isReleased) {
+-                    throw IllegalStateException("No adjust token defined for release build")
+-                }
+-
+-                return
+-            }
+-
+-            val config = buildAdjustConfig(token, settings, shouldRegisterAttributionListener)
+-
+-            // All configuration have to be done before this.
+-            adjustSdk.initSdk(config)
+-            adjustSdk.enable()
+-            initialized = true
+-            logger.info("Adjust SDK enabled")
+-        }
+-    }
+-
+-    private suspend fun buildAdjustConfig(
+-        token: String,
+-        settings: Settings,
+-        shouldRegisterAttributionListener: Boolean,
+-    ): AdjustConfig {
+-        System.setProperty(ADJUST_PREINSTALL_SYSTEM_PROPERTY_PATH, "/preload/etc/adjust.preinstall")
+-
+-        val config =
+-            AdjustConfig(
+-                application,
+-                token,
+-                AdjustConfig.ENVIRONMENT_PRODUCTION,
+-                true,
+-            )
+-        config.enablePreinstallTracking()
+-
+-        val distributionIdManager = application.components.distributionIdManager
+-
+-        // If we skipped the marketing consent screen, enable COPPA compliance to prevent
+-        // personal identifiers from being shared with Adjust.
+-        when (distributionIdManager.getDistributionAdjustStartupStrategy()) {
+-            DistributionAdjustStartupStrategy.IMMEDIATE_WITH_COPPA -> config.enableCoppaCompliance()
+-
+-            DistributionAdjustStartupStrategy.IMMEDIATE_WITH_PLAY_STORE_KIDS -> config.enablePlayStoreKidsCompliance()
+-
+-            else -> {}
+-        }
+-
+-        if (shouldRegisterAttributionListener && !alreadyKnown(settings)) {
+-            setAttributionChangedListener(config, settings)
+-        }
+-
+-        config.setLogLevel(LogLevel.SUPPRESS)
+-
+-        config.disableFbIdReading()
+-        applyThirdPartySharingSettings(
+-            distribution = distributionIdManager.getDistribution(),
+-            isUserMetaAttributed = settings.isUserMetaAttributed,
+-            isUserTikTokAttributed = settings.isUserTikTokAttributed,
+-            isUserRedditAttributed = settings.isUserRedditAttributed,
+-            isUserXTwitterAttributed = settings.isUserXTwitterAttributed,
+-            isUserMolocoAttributed = settings.isUserMolocoAttributed,
+-            isUserRakutenAttributed = settings.isUserRakutenAttributed,
+-            isUserSkyflagAttributed = settings.isUserSkyflagAttributed,
+-            isUserQuoraAttributed = settings.isUserQuoraAttributed,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        return config
+-    }
+-
+-    private fun setAttributionChangedListener(config: AdjustConfig, settings: Settings) {
+-        val timerId = AdjustAttribution.adjustAttributionTime.start()
+-
+-        config.setOnAttributionChangedListener {
+-            AdjustAttribution.adjustAttributionTime.stopAndAccumulate(timerId)
+-
+-            if (!it.network.isNullOrEmpty()) {
+-                settings.adjustNetwork = it.network
+-                AdjustAttribution.network.set(it.network)
+-            }
+-            if (!it.adgroup.isNullOrEmpty()) {
+-                settings.adjustAdGroup = it.adgroup
+-                AdjustAttribution.adgroup.set(it.adgroup)
+-            }
+-            if (!it.creative.isNullOrEmpty()) {
+-                settings.adjustCreative = it.creative
+-                AdjustAttribution.creative.set(it.creative)
+-            }
+-            if (!it.campaign.isNullOrEmpty()) {
+-                settings.adjustCampaignId = it.campaign
+-                AdjustAttribution.campaign.set(it.campaign)
+-            }
+-
+-            triggerPing()
+-            logger.info("Trigger ping")
+-        }
+-    }
+-
+-    override fun shouldTrack(event: Event): Boolean = event is Event.GrowthData || event is Event.FirstWeekPostInstall
+-
+-    companion object {
+-        const val CONVERSION_EVENT_1 = 1
+-        const val CONVERSION_EVENT_2 = 2
+-        const val CONVERSION_EVENT_3 = 3
+-        const val CONVERSION_EVENT_4 = 4
+-        const val CONVERSION_EVENT_5 = 5
+-        const val CONVERSION_EVENT_6 = 6
+-        const val CONVERSION_EVENT_7 = 7
+-        const val CONVERSION_EVENT_8 = 8
+-        const val CONVERSION_EVENT_9 = 9
+-        const val CONVERSION_EVENT_10 = 10
+-
+-        /** Records a glean event matching the Adjust conversion event, and sends the Adjust attribution ping. */
+-        @VisibleForTesting
+-        internal fun sendGleanEventAndPing(
+-            event: Event,
+-            conversionEventRecorder: ConversionEventRecorder = GleanConversionEventRecorder(),
+-        ) {
+-            when (event) {
+-                is Event.GrowthData.ConversionEvent1 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_1)
+-                is Event.GrowthData.ConversionEvent2 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_2)
+-                is Event.GrowthData.ConversionEvent3 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_3)
+-                is Event.GrowthData.ConversionEvent4 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_4)
+-                is Event.GrowthData.ConversionEvent5 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_5)
+-                is Event.GrowthData.ConversionEvent6 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_6)
+-                is Event.GrowthData.ConversionEvent7 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_7)
+-                is Event.FirstWeekPostInstall.ConversionEvent8 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_8)
+-                is Event.FirstWeekPostInstall.ConversionEvent9 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_9)
+-                is Event.FirstWeekPostInstall.ConversionEvent10 ->
+-                    conversionEventRecorder.recordConversionEvent(CONVERSION_EVENT_10)
+-            }
+-        }
+-
+-        /** Sets third party sharing settings based on distribution and attribution. */
+-        @Suppress("LongParameterList")
+-        @VisibleForTesting
+-        internal fun applyThirdPartySharingSettings(
+-            distribution: DistributionIdManager.Distribution,
+-            isUserMetaAttributed: Boolean,
+-            isUserTikTokAttributed: Boolean,
+-            isUserRedditAttributed: Boolean,
+-            isUserXTwitterAttributed: Boolean,
+-            isUserMolocoAttributed: Boolean,
+-            isUserRakutenAttributed: Boolean,
+-            isUserSkyflagAttributed: Boolean,
+-            isUserQuoraAttributed: Boolean,
+-            controller: ThirdPartySharingController = AdjustThirdPartySharingController(),
+-        ) {
+-            when (distribution) {
+-                DistributionIdManager.Distribution.DEFAULT -> {
+-                    controller.disableAllThirdPartySharing()
+-                    // Listed in priority order. Multiple flags can be true at once, so the order
+-                    // is load-bearing. Insert new partners at the position matching their priority.
+-                    when {
+-                        isUserMetaAttributed -> controller.enableThirdPartySharingForPartner(META_PARTNER_ID)
+-                        isUserTikTokAttributed -> controller.enableThirdPartySharingForPartner(TIKTOK_PARTNER_ID)
+-                        isUserRedditAttributed -> controller.enableThirdPartySharingForPartner(REDDIT_PARTNER_ID)
+-                        isUserXTwitterAttributed -> controller.enableThirdPartySharingForPartner(X_TWITTER_PARTNER_ID)
+-                        isUserMolocoAttributed -> controller.enableThirdPartySharingForPartner(MOLOCO_PARTNER_ID)
+-                        isUserRakutenAttributed || isUserSkyflagAttributed || isUserQuoraAttributed ->
+-                            controller.enableThirdPartySharingForPartner(DYNAMIC_CALLBACK_ID)
+-                        else -> controller.enableThirdPartySharingForPartner(GOOGLE_PARTNER_ID)
+-                    }
+-                }
+-
+-                DistributionIdManager.Distribution.AURA_001 -> {
+-                    controller.enableThirdPartySharingForPartner(AURA_PARTNER_ID)
+-                }
+-
+-                DistributionIdManager.Distribution.VIVO_001,
+-                DistributionIdManager.Distribution.DT_001,
+-                DistributionIdManager.Distribution.DT_002,
+-                DistributionIdManager.Distribution.DT_003,
+-                DistributionIdManager.Distribution.XIAOMI_001 -> {
+-                    controller.disableAllThirdPartySharing()
+-                }
+-            // Do not add an else branch here. All distributions should be handled deliberately.
+-            }
+-        }
+-
+-        @VisibleForTesting
+-        internal fun alreadyKnown(settings: Settings): Boolean {
+-            return settings.adjustCampaignId.isNotEmpty() ||
+-                settings.adjustNetwork.isNotEmpty() ||
+-                settings.adjustCreative.isNotEmpty() ||
+-                settings.adjustAdGroup.isNotEmpty()
+-        }
+-
+-        private fun triggerPing() {
+-            CoroutineScope(Dispatchers.IO).launch {
+-                Pings.adjustAttribution.submit()
+-            }
+-        }
+-    }
+-}
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustSdkController.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustSdkController.kt
+deleted file mode 100644
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustSdkController.kt
++++ /dev/null
+@@ -1,41 +0,0 @@
+-/* This Source Code Form is subject to the terms of the Mozilla Public
+- * License, v. 2.0. If a copy of the MPL was not distributed with this
+- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+-
+-package org.mozilla.fenix.components.metrics
+-
+-import android.content.Context
+-import com.adjust.sdk.Adjust
+-import com.adjust.sdk.AdjustConfig
+-import com.adjust.sdk.AdjustEvent
+-
+-/**
+- * Thin seam around the Adjust SDK's static entry points so that [AdjustMetricsService] can be unit-tested without
+- * mocking statics.
+- */
+-interface AdjustSdkController {
+-
+-    /** Initializes the Adjust SDK with the given [config]. Must be called before any other method. */
+-    fun initSdk(config: AdjustConfig)
+-
+-    /** Enables the Adjust SDK so it starts tracking. */
+-    fun enable()
+-
+-    /** Tracks the given [event]. */
+-    fun trackEvent(event: AdjustEvent)
+-
+-    /** Requests that Adjust erase the user's data for GDPR "forget me", using [context]. */
+-    fun gdprForgetMe(context: Context)
+-}
+-
+-/** [AdjustSdkController] implementation that delegates to the Adjust SDK. */
+-class DefaultAdjustSdkController : AdjustSdkController {
+-
+-    override fun initSdk(config: AdjustConfig) = Adjust.initSdk(config)
+-
+-    override fun enable() = Adjust.enable()
+-
+-    override fun trackEvent(event: AdjustEvent) = Adjust.trackEvent(event)
+-
+-    override fun gdprForgetMe(context: Context) = Adjust.gdprForgetMe(context)
+-}
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustThirdPartySharingController.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustThirdPartySharingController.kt
+deleted file mode 100644
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/metrics/AdjustThirdPartySharingController.kt
++++ /dev/null
+@@ -1,65 +0,0 @@
+-/* This Source Code Form is subject to the terms of the Mozilla Public
+- * License, v. 2.0. If a copy of the MPL was not distributed with this
+- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+-
+-package org.mozilla.fenix.components.metrics
+-
+-import com.adjust.sdk.Adjust
+-import com.adjust.sdk.AdjustThirdPartySharing
+-
+-/** Controls third-party data sharing settings for distribution and attribution partners. */
+-interface ThirdPartySharingController {
+-
+-    /**
+-     * Enables data sharing exclusively for the given partner, disabling it for all others.
+-     *
+-     * @param partnerId The Adjust partner ID to enable sharing for.
+-     */
+-    fun enableThirdPartySharingForPartner(partnerId: String)
+-
+-    /** Disables data sharing with all third-party partners globally. */
+-    fun disableAllThirdPartySharing()
+-}
+-
+-/** [ThirdPartySharingController] implementation that delegates to the Adjust SDK. */
+-class AdjustThirdPartySharingController : ThirdPartySharingController {
+-
+-    override fun enableThirdPartySharingForPartner(partnerId: String) {
+-        Adjust.trackThirdPartySharing(
+-            AdjustThirdPartySharing(true).apply {
+-                addPartnerSharingSetting("all", "all", false)
+-                addPartnerSharingSetting(partnerId, "all", true)
+-            }
+-        )
+-    }
+-
+-    override fun disableAllThirdPartySharing() {
+-        Adjust.trackThirdPartySharing(AdjustThirdPartySharing(false))
+-    }
+-
+-    companion object {
+-        /** Adjust partner ID for Meta. */
+-        const val META_PARTNER_ID = "34"
+-
+-        /** Adjust partner ID for Aura. */
+-        const val AURA_PARTNER_ID = "802"
+-
+-        /** Adjust partner ID for Google. */
+-        const val GOOGLE_PARTNER_ID = "254"
+-
+-        /** Adjust partner ID for TikTok. */
+-        const val TIKTOK_PARTNER_ID = "2337"
+-
+-        /** Adjust partner ID for Reddit. */
+-        const val REDDIT_PARTNER_ID = "375"
+-
+-        /** Adjust partner ID for X (Twitter). */
+-        const val X_TWITTER_PARTNER_ID = "32"
+-
+-        /** Adjust partner ID for Moloco. */
+-        const val MOLOCO_PARTNER_ID = "56"
+-
+-        /** Adjust partner ID for dynamic callback partners. */
+-        const val DYNAMIC_CALLBACK_ID = "dynamic_callbacks"
+-    }
+-}
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/push/FirebasePushService.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/push/FirebasePushService.kt
+deleted file mode 100644
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/push/FirebasePushService.kt
++++ /dev/null
+@@ -1,13 +0,0 @@
+-/* This Source Code Form is subject to the terms of the Mozilla Public
+- * License, v. 2.0. If a copy of the MPL was not distributed with this
+- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+-
+-package org.mozilla.fenix.push
+-
+-import android.annotation.SuppressLint
+-import mozilla.components.feature.push.AutoPushFeature
+-import mozilla.components.lib.push.firebase.AbstractFirebasePushService
+-
+-/** A singleton instance of the FirebasePushService needed for communicating between FCM and the [AutoPushFeature]. */
+-@SuppressLint("MissingFirebaseInstanceTokenRefresh") // Implemented internally.
+-class FirebasePushService : AbstractFirebasePushService()
+diff --git a/mobile/android/fenix/app/src/test/java/org/mozilla/fenix/components/metrics/AdjustMetricsServiceTest.kt b/mobile/android/fenix/app/src/test/java/org/mozilla/fenix/components/metrics/AdjustMetricsServiceTest.kt
+deleted file mode 100644
+--- a/mobile/android/fenix/app/src/test/java/org/mozilla/fenix/components/metrics/AdjustMetricsServiceTest.kt
++++ /dev/null
+@@ -1,609 +0,0 @@
+-/* This Source Code Form is subject to the terms of the Mozilla Public
+- * License, v. 2.0. If a copy of the MPL was not distributed with this
+- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+-
+-package org.mozilla.fenix.components.metrics
+-
+-import android.app.Application
+-import android.content.Context
+-import androidx.test.core.app.ApplicationProvider
+-import androidx.test.ext.junit.runners.AndroidJUnit4
+-import com.adjust.sdk.AdjustConfig
+-import io.mockk.Runs
+-import io.mockk.coEvery
+-import io.mockk.coVerify
+-import io.mockk.every
+-import io.mockk.just
+-import io.mockk.mockk
+-import io.mockk.slot
+-import io.mockk.verify
+-import io.mockk.verifyOrder
+-import kotlin.test.assertNotNull
+-import kotlinx.coroutines.ExperimentalCoroutinesApi
+-import kotlinx.coroutines.test.TestScope
+-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+-import kotlinx.coroutines.test.advanceUntilIdle
+-import kotlinx.coroutines.test.runTest
+-import mozilla.components.support.test.robolectric.testContext
+-import org.junit.Assert.assertFalse
+-import org.junit.Assert.assertNull
+-import org.junit.Assert.assertTrue
+-import org.junit.Before
+-import org.junit.Rule
+-import org.junit.Test
+-import org.junit.runner.RunWith
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.AURA_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.DYNAMIC_CALLBACK_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.GOOGLE_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.META_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.MOLOCO_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.REDDIT_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.TIKTOK_PARTNER_ID
+-import org.mozilla.fenix.components.metrics.AdjustThirdPartySharingController.Companion.X_TWITTER_PARTNER_ID
+-import org.mozilla.fenix.distributions.DistributionAdjustStartupStrategy
+-import org.mozilla.fenix.distributions.DistributionIdManager
+-import org.mozilla.fenix.ext.components
+-import org.mozilla.fenix.helpers.FenixGleanTestRule
+-import org.mozilla.fenix.utils.Settings
+-
+-@OptIn(ExperimentalCoroutinesApi::class)
+-@RunWith(AndroidJUnit4::class)
+-internal class AdjustMetricsServiceTest {
+-    val context: Context = ApplicationProvider.getApplicationContext()
+-    val thirdPartySharingController = mockk<ThirdPartySharingController>(relaxed = true)
+-    val conversionEventRecorder = mockk<ConversionEventRecorder>(relaxed = true)
+-
+-    @get:Rule val gleanTestRule = FenixGleanTestRule(ApplicationProvider.getApplicationContext())
+-
+-    @Before
+-    fun setUp() {
+-        every { testContext.components.settings } returns Settings(testContext)
+-        every { testContext.components.distributionIdManager } returns
+-            mockk<DistributionIdManager>(relaxed = true) {
+-                coEvery { getDistribution() } returns DistributionIdManager.Distribution.DEFAULT
+-                coEvery { getDistributionAdjustStartupStrategy() } returns DistributionAdjustStartupStrategy.NONE
+-            }
+-    }
+-
+-    private fun TestScope.createAdjustMetricsService(
+-        adjustSdk: AdjustSdkController,
+-        storage: MetricsStorage = mockk(relaxed = true),
+-    ) =
+-        AdjustMetricsService(
+-            application = testContext as Application,
+-            storage = storage,
+-            crashReporter = mockk(relaxed = true),
+-            dispatcher = UnconfinedTestDispatcher(testScheduler),
+-            adjustSdk = adjustSdk,
+-            adjustToken = "fake-adjust-token",
+-            thirdPartySharingController = mockk(relaxed = true),
+-        )
+-
+-    @Test
+-    fun `WHEN start is called AND attribution is already known THEN Adjust is not initialized`() = runTest {
+-        every { testContext.components.settings } returns Settings(testContext).apply { adjustCampaignId = "campaign" }
+-        val adjustSdk = mockk<AdjustSdkController>(relaxed = true)
+-        val service = createAdjustMetricsService(adjustSdk)
+-
+-        service.start()
+-        advanceUntilIdle()
+-
+-        verify(exactly = 0) { adjustSdk.initSdk(any()) }
+-        verify(exactly = 0) { adjustSdk.enable() }
+-    }
+-
+-    @Test
+-    fun `WHEN attribution is unknown on start THEN Adjust is initialized with an attribution listener`() = runTest {
+-        val adjustSdk = mockk<AdjustSdkController>(relaxed = true)
+-        val configSlot = slot<AdjustConfig>()
+-        every { adjustSdk.initSdk(capture(configSlot)) } just Runs
+-        val service = createAdjustMetricsService(adjustSdk)
+-
+-        service.start()
+-        advanceUntilIdle()
+-
+-        verify { adjustSdk.initSdk(any()) }
+-        verify { adjustSdk.enable() }
+-        assertNotNull(configSlot.captured.onAttributionChangedListener)
+-    }
+-
+-    @Test
+-    fun `WHEN stop is called THEN forget-me is sent before init without attribution tracking`() = runTest {
+-        val adjustSdk = mockk<AdjustSdkController>(relaxed = true)
+-        val configSlot = slot<AdjustConfig>()
+-        every { adjustSdk.initSdk(capture(configSlot)) } just Runs
+-        val service = createAdjustMetricsService(adjustSdk)
+-
+-        service.stop()
+-        advanceUntilIdle()
+-
+-        verifyOrder {
+-            adjustSdk.gdprForgetMe(any())
+-            adjustSdk.initSdk(any())
+-        }
+-        assertNull(configSlot.captured.onAttributionChangedListener)
+-    }
+-
+-    @Test
+-    fun `WHEN stop is called with service already started THEN forget-me is sent without re-init`() = runTest {
+-        val adjustSdk = mockk<AdjustSdkController>(relaxed = true)
+-        val configSlot = slot<AdjustConfig>()
+-        every { adjustSdk.initSdk(capture(configSlot)) } just Runs
+-        val service = createAdjustMetricsService(adjustSdk)
+-
+-        service.start()
+-        advanceUntilIdle()
+-
+-        service.stop()
+-        advanceUntilIdle()
+-
+-        verifyOrder {
+-            adjustSdk.initSdk(any())
+-            adjustSdk.enable()
+-            adjustSdk.gdprForgetMe(any())
+-        }
+-    }
+-
+-    @Test
+-    fun `WHEN Adjust is used multiple times THEN it is initialized only once`() = runTest {
+-        val adjustSdk = mockk<AdjustSdkController>(relaxed = true)
+-        val storage =
+-            mockk<MetricsStorage> {
+-                coEvery { shouldTrack(any()) } returns true
+-                coEvery { updateSentState(any()) } just Runs
+-            }
+-        val service = createAdjustMetricsService(adjustSdk, storage)
+-
+-        service.track(Event.GrowthData.ConversionEvent1)
+-        service.track(Event.GrowthData.ConversionEvent2)
+-        advanceUntilIdle()
+-
+-        verify(exactly = 1) { adjustSdk.initSdk(any()) }
+-    }
+-
+-    @Test
+-    fun `WHEN a growth event should be tracked THEN it is sent through the Adjust SDK and its sent state is updated`() =
+-        runTest {
+-            val adjustSdk = mockk<AdjustSdkController>(relaxed = true)
+-            val storage =
+-                mockk<MetricsStorage> {
+-                    coEvery { shouldTrack(any()) } returns true
+-                    coEvery { updateSentState(any()) } just Runs
+-                }
+-            val service =
+-                AdjustMetricsService(
+-                    application = testContext as Application,
+-                    storage = storage,
+-                    crashReporter = mockk(relaxed = true),
+-                    dispatcher = UnconfinedTestDispatcher(testScheduler),
+-                    adjustSdk = adjustSdk,
+-                )
+-
+-            service.track(Event.GrowthData.ConversionEvent1)
+-            advanceUntilIdle()
+-
+-            verify { adjustSdk.trackEvent(any()) }
+-            coVerify { storage.updateSentState(Event.GrowthData.ConversionEvent1) }
+-        }
+-
+-    @Test
+-    fun `WHEN a growth event should not be tracked THEN Adjust is neither started nor used`() = runTest {
+-        val adjustSdk = mockk<AdjustSdkController>(relaxed = true)
+-        val storage =
+-            mockk<MetricsStorage> {
+-                coEvery { shouldTrack(any()) } returns false
+-            }
+-        val service =
+-            AdjustMetricsService(
+-                application = testContext as Application,
+-                storage = storage,
+-                crashReporter = mockk(relaxed = true),
+-                dispatcher = UnconfinedTestDispatcher(testScheduler),
+-                adjustSdk = adjustSdk,
+-            )
+-
+-        service.track(Event.GrowthData.ConversionEvent1)
+-        advanceUntilIdle()
+-
+-        verify(exactly = 0) { adjustSdk.initSdk(any()) }
+-        verify(exactly = 0) { adjustSdk.trackEvent(any()) }
+-        coVerify(exactly = 0) { storage.updateSentState(any()) }
+-    }
+-
+-    @Test
+-    fun `WHEN Adjust attribution data already exist THEN already known is true`() {
+-        val settings = Settings(context)
+-        assertFalse(AdjustMetricsService.alreadyKnown(settings))
+-
+-        settings.adjustCampaignId = "campaign"
+-        assertTrue(AdjustMetricsService.alreadyKnown(settings))
+-
+-        settings.adjustCampaignId = ""
+-        assertFalse(AdjustMetricsService.alreadyKnown(settings))
+-
+-        settings.adjustNetwork = "network"
+-        assertTrue(AdjustMetricsService.alreadyKnown(settings))
+-
+-        settings.adjustNetwork = ""
+-        assertFalse(AdjustMetricsService.alreadyKnown(settings))
+-
+-        settings.adjustAdGroup = "ad group"
+-        assertTrue(AdjustMetricsService.alreadyKnown(settings))
+-
+-        settings.adjustAdGroup = ""
+-        assertFalse(AdjustMetricsService.alreadyKnown(settings))
+-
+-        settings.adjustCreative = "creative"
+-        assertTrue(AdjustMetricsService.alreadyKnown(settings))
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is meta attributed THEN sharing is enabled for META`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = true,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(META_PARTNER_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user has no Meta, TikTok, Reddit, X, or Rakuten attribution THEN sharing is enabled for Google`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(GOOGLE_PARTNER_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is TikTok attributed THEN sharing is enabled for TikTok`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = true,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(TIKTOK_PARTNER_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is Reddit attributed THEN sharing is enabled for Reddit`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = true,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(REDDIT_PARTNER_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is X attributed THEN sharing is enabled for X`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = true,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(X_TWITTER_PARTNER_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is Moloco attributed THEN sharing is enabled for Moloco`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = true,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(MOLOCO_PARTNER_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is Rakuten attributed THEN sharing is enabled for Rakuten`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = true,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(DYNAMIC_CALLBACK_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is Skyflag attributed THEN sharing is enabled for dynamic callbacks`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = true,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(DYNAMIC_CALLBACK_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DEFAULT AND the user is Quora attributed THEN sharing is enabled for dynamic callbacks`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DEFAULT,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = true,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(DYNAMIC_CALLBACK_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is AURA_001 THEN sharing is enabled for Aura`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.AURA_001,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.enableThirdPartySharingForPartner(AURA_PARTNER_ID) }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is VIVO_001 THEN all sharing is disabled`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.VIVO_001,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.disableAllThirdPartySharing() }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DT_001 THEN all sharing is disabled`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DT_001,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.disableAllThirdPartySharing() }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DT_002 THEN all sharing is disabled`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DT_002,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.disableAllThirdPartySharing() }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is DT_003 THEN all sharing is disabled`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.DT_003,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.disableAllThirdPartySharing() }
+-    }
+-
+-    @Test
+-    fun `WHEN the distribution is XIAOMI_001 THEN all sharing is disabled`() {
+-        AdjustMetricsService.applyThirdPartySharingSettings(
+-            distribution = DistributionIdManager.Distribution.XIAOMI_001,
+-            isUserMetaAttributed = false,
+-            isUserTikTokAttributed = false,
+-            isUserRedditAttributed = false,
+-            isUserXTwitterAttributed = false,
+-            isUserMolocoAttributed = false,
+-            isUserRakutenAttributed = false,
+-            isUserSkyflagAttributed = false,
+-            isUserQuoraAttributed = false,
+-            controller = thirdPartySharingController,
+-        )
+-
+-        verify { thirdPartySharingController.disableAllThirdPartySharing() }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent1 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.GrowthData.ConversionEvent1,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(1) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent2 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.GrowthData.ConversionEvent2,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(2) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent3 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.GrowthData.ConversionEvent3,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(3) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent4 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.GrowthData.ConversionEvent4,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(4) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent5 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.GrowthData.ConversionEvent5,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(5) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent6 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.GrowthData.ConversionEvent6,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(6) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent7 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.GrowthData.ConversionEvent7(fromSearch = true),
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(7) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent8 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.FirstWeekPostInstall.ConversionEvent8,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(8) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent9 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.FirstWeekPostInstall.ConversionEvent9,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(9) }
+-    }
+-
+-    @Test
+-    fun `GIVEN a ConversionEvent10 event WHEN sendGleanEventAndPing is called THEN the event is recorded and the ping is submitted`() {
+-        AdjustMetricsService.sendGleanEventAndPing(
+-            Event.FirstWeekPostInstall.ConversionEvent10,
+-            conversionEventRecorder,
+-        )
+-
+-        verify { conversionEventRecorder.recordConversionEvent(10) }
+-    }
+-}

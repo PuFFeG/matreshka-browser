@@ -9,25 +9,28 @@ SRC="${1:-${FIREFOX_SRC:-}}"
 PATCH="$ROOT/patches/core/matreshka-trust.patch"
 
 echo "==> Applying core patch"
-if git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    if git -C "$SRC" apply --check "$PATCH"; then
-        git -C "$SRC" apply "$PATCH"
-    elif git -C "$SRC" apply --reverse --check "$PATCH" 2>/dev/null; then
+if command -v git >/dev/null 2>&1; then
+    if (cd "$SRC" && git apply --check "$PATCH" 2>/dev/null); then
+        (cd "$SRC" && git apply "$PATCH")
+    elif (cd "$SRC" && git apply --reverse --check "$PATCH" 2>/dev/null); then
         echo "core patch already applied"
     else
         echo "error: core patch does not apply cleanly; rebase it first" >&2
         exit 1
     fi
+elif (cd "$SRC" && patch -p1 --dry-run --forward < "$PATCH" >/dev/null 2>&1); then
+    (cd "$SRC" && patch -p1 --forward < "$PATCH")
+elif (cd "$SRC" && patch -p1 --dry-run --reverse < "$PATCH" >/dev/null 2>&1); then
+    echo "core patch already applied"
 else
-    if (cd "$SRC" && patch -p1 --dry-run --forward < "$PATCH" >/dev/null 2>&1); then
-        (cd "$SRC" && patch -p1 --forward < "$PATCH")
-    elif (cd "$SRC" && patch -p1 --dry-run --reverse < "$PATCH" >/dev/null 2>&1); then
-        echo "core patch already applied"
-    else
-        echo "error: core patch does not apply cleanly; rebase it first" >&2
-        exit 1
-    fi
+    echo "error: core patch does not apply cleanly; rebase it first" >&2
+    exit 1
 fi
 
-echo "==> Applying Fenix overlay"
-"$ROOT/fenix/apply.sh" "$SRC/mobile/android/fenix"
+if "$ROOT/scripts/apply-fenix-patches.sh" --check "$SRC"; then
+    echo "Fenix patches already applied; skipping overlay"
+else
+    echo "==> Applying Fenix overlay"
+    "$ROOT/fenix/apply.sh" "$SRC/mobile/android/fenix"
+    "$ROOT/scripts/apply-fenix-patches.sh" "$SRC"
+fi

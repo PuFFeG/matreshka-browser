@@ -7,7 +7,8 @@ APK="${1:?usage: verify-apk.sh path/to/app.apk}"
 
 EXPECTED_PACKAGE="${EXPECTED_PACKAGE:-ru.matreshka.browser}"
 EXPECTED_LABEL="${EXPECTED_LABEL:-matreshka-browser}"
-EXPECTED_VERSION="${EXPECTED_VERSION:-0.2.0}"
+EXPECTED_VERSION="${EXPECTED_VERSION:-0.2.1}"
+EXPECTED_VERSION_CODE="${EXPECTED_VERSION_CODE:-2016191883}"
 
 if [ -n "${ANDROID_BUILD_TOOLS:-}" ]; then
     BT="$ANDROID_BUILD_TOOLS"
@@ -22,11 +23,13 @@ PKG="$("$AAPT2" dump packagename "$APK")"
 BADGING="$("$AAPT" dump badging "$APK")"
 LABEL="$(printf '%s\n' "$BADGING" | awk -F"'" '/^application-label:/{print $2; exit}')"
 VERSION="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='[^']*' versionCode='[^']*' versionName='\([^']*\)'.*/\1/p" | head -1)"
+VERSION_CODE="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='[^']*' versionCode='\([^']*\)'.*/\1/p" | head -1)"
 
 fail=0
 [ -n "$PKG" ] && [ "$PKG" != "null" ] && [ "$PKG" = "$EXPECTED_PACKAGE" ] || { echo "FAIL package: '$PKG' (expected '$EXPECTED_PACKAGE')" >&2; fail=1; }
 [ -n "$LABEL" ] && [ "$LABEL" = "$EXPECTED_LABEL" ] || { echo "FAIL label: '$LABEL' (expected '$EXPECTED_LABEL')" >&2; fail=1; }
 [ -n "$VERSION" ] && [ "$VERSION" = "$EXPECTED_VERSION" ] || { echo "FAIL version: '$VERSION' (expected '$EXPECTED_VERSION')" >&2; fail=1; }
+[ -n "$VERSION_CODE" ] && [ "$VERSION_CODE" = "$EXPECTED_VERSION_CODE" ] || { echo "FAIL versionCode: '$VERSION_CODE' (expected '$EXPECTED_VERSION_CODE')" >&2; fail=1; }
 
 printf 'package: %s\nlabel:   %s\nversion: %s\n' "$PKG" "$LABEL" "$VERSION"
 

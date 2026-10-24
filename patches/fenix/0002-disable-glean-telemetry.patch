@@ -1,0 +1,195 @@
+diff --git a/mobile/android/fenix/app/build.gradle b/mobile/android/fenix/app/build.gradle
+--- a/mobile/android/fenix/app/build.gradle
++++ b/mobile/android/fenix/app/build.gradle
+@@ -346,7 +346,7 @@
+ 
+ android.defaultConfig.with {
+     buildConfigField 'boolean', 'CRASH_REPORTING', 'true'
+-    buildConfigField 'boolean', 'TELEMETRY', 'true'
++    buildConfigField 'boolean', 'TELEMETRY', 'false'
+ 
+     // Setting buildDate with every build ID changes the generated BuildConfig and slows down the
+     // build, so debug builds (overridden below) use a fixed string instead.
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/GleanHelper.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/GleanHelper.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/GleanHelper.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/GleanHelper.kt
+@@ -6,14 +6,12 @@
+ 
+ import android.content.Context
+ import mozilla.components.concept.fetch.Client
+-import mozilla.components.service.glean.net.ConceptFetchHttpUploader
+ import mozilla.components.support.base.log.logger.Logger
+ import mozilla.telemetry.glean.Glean
+ import mozilla.telemetry.glean.config.Configuration
+ import org.mozilla.fenix.BuildConfig
+ import org.mozilla.fenix.Config
+ import org.mozilla.fenix.GleanMetrics.GleanBuildInfo
+-import org.mozilla.fenix.GleanMetrics.Pings
+ import org.mozilla.fenix.debugsettings.gleandebugtools.DefaultGleanDebugToolsStorage
+ import org.mozilla.fenix.ext.components
+ import org.mozilla.fenix.ext.getCustomGleanServerUrlIfAvailable
+@@ -42,29 +40,17 @@
+     val configuration =
+         Configuration(
+             channel = BuildConfig.BUILD_TYPE,
+-            httpClient =
+-                ConceptFetchHttpUploader(
+-                    lazy(LazyThreadSafetyMode.NONE) { client },
+-                    supportsOhttp = true,
+-                ),
++            httpClient = MatreshkaGleanUploader,
+             enableEventTimestamps = FxNimbus.features.glean.value().enableEventTimestamps,
+             delayPingLifetimeIo = FxNimbus.features.glean.value().delayPingLifetimeIo,
+             pingLifetimeThreshold = FxNimbus.features.glean.value().pingLifetimeThreshold,
+             pingLifetimeMaxTime = FxNimbus.features.glean.value().pingLifetimeMaxTime,
+         )
+ 
+-    // Since Glean v63.0.0, custom pings need to be registered prior to Glean init
+-    // in order to ensure they are enabled and able to collect data.
+-    // See https://bugzilla.mozilla.org/1934931 for more information.
+-    Glean.registerPings(Pings)
+-
+-    // Set the metric configuration from Nimbus.
+-    Glean.applyServerKnobsConfig(FxNimbus.features.glean.value().gleanMetricConfiguration.toJSONObject().toString())
+-
+     Glean.initialize(
+         applicationContext = applicationContext,
+         configuration = configuration.setCustomEndpointIfAvailable(customEndpoint),
+-        uploadEnabled = isTelemetryUploadEnabled,
++        uploadEnabled = false,
+         buildInfo = GleanBuildInfo.buildInfo,
+     )
+ 
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Analytics.kt
+@@ -14,20 +14,15 @@
+ import mozilla.components.lib.crash.runtimetagproviders.ExperimentDataRuntimeTagProvider
+ import mozilla.components.lib.crash.runtimetagproviders.VersionInfoProvider
+ import mozilla.components.lib.crash.service.CrashReporterService
+-import mozilla.components.lib.crash.service.GleanCrashReporterService
+ import mozilla.components.lib.crash.service.socorro.MozillaSocorroService
+ import mozilla.components.lib.crash.store.CrashReportOption
+ import mozilla.components.support.utils.Browsers
+ import mozilla.components.support.utils.RunWhenReadyQueue
+ import mozilla.components.support.utils.ext.packageManagerCompatHelper
+-import org.mozilla.fenix.Config
+ import org.mozilla.fenix.HomeActivity
+ import org.mozilla.fenix.R
+ import org.mozilla.fenix.components.metrics.DefaultMetricsStorage
+ import org.mozilla.fenix.components.metrics.FirstSessionMetricsService
+-import org.mozilla.fenix.components.metrics.GleanMetricsService
+-import org.mozilla.fenix.components.metrics.GleanProfileIdPreferenceStore
+-import org.mozilla.fenix.components.metrics.GleanUsageReportingMetricsService
+ import org.mozilla.fenix.components.metrics.InstallReferrerMetricsService
+ import org.mozilla.fenix.components.metrics.MetricController
+ import org.mozilla.fenix.components.metrics.MetricsStorage
+@@ -35,12 +30,9 @@
+ import org.mozilla.fenix.crashes.NimbusExperimentDataProvider
+ import org.mozilla.fenix.crashes.ReleaseRuntimeTagProvider
+ import org.mozilla.fenix.crashes.crashReportOption
+-import org.mozilla.fenix.ext.getCustomGleanServerUrlIfAvailable
+ import org.mozilla.fenix.perf.lazyMonitored
+ import org.mozilla.fenix.utils.Settings
+-import org.mozilla.geckoview.BuildConfig.MOZ_APP_BUILDID
+ import org.mozilla.geckoview.BuildConfig.MOZ_APP_VENDOR
+-import org.mozilla.geckoview.BuildConfig.MOZ_APP_VERSION
+ import org.mozilla.geckoview.BuildConfig.MOZ_UPDATE_CHANNEL
+ 
+ /** Component group for all functionality related to analytics e.g. crash reporting and telemetry. */
+@@ -84,28 +76,10 @@
+                 crashReportingIntentFlags,
+             )
+ 
+-        val gleanServerEndpoint =
+-            if (Config.channel.isNightlyOrDebug) {
+-                // for testing, if custom glean server url is set in the secret menu, use it to initialize Glean
+-                getCustomGleanServerUrlIfAvailable(context)
+-            } else {
+-                null
+-            }
+-
+         CrashReporter(
+             context = context,
+             services = services,
+-            telemetryServices =
+-                listOf(
+-                    GleanCrashReporterService(
+-                        context,
+-                        appChannel = MOZ_UPDATE_CHANNEL,
+-                        appVersion = MOZ_APP_VERSION,
+-                        appBuildId = MOZ_APP_BUILDID,
+-                        isUploadEnabled = settings.isTelemetryEnabled,
+-                        serverEndpoint = gleanServerEndpoint,
+-                    )
+-                ),
++            telemetryServices = emptyList(),
+             shouldPrompt = CrashReporter.Prompt.ALWAYS,
+             promptConfiguration =
+                 CrashReporter.PromptConfiguration(
+@@ -142,10 +116,8 @@
+     val metrics: MetricController by lazyMonitored {
+         MetricController.create(
+             listOf(
+-                GleanMetricsService(context),
+                 FirstSessionMetricsService(context),
+                 InstallReferrerMetricsService(context, settings),
+-                GleanUsageReportingMetricsService(gleanProfileIdStore = GleanProfileIdPreferenceStore(context)),
+             ),
+             isDataTelemetryEnabled = { settings.isTelemetryEnabled },
+             isMarketingDataTelemetryEnabled = {
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/onboarding/OnboardingFragment.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/onboarding/OnboardingFragment.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/onboarding/OnboardingFragment.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/onboarding/OnboardingFragment.kt
+@@ -28,7 +28,6 @@
+ import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
+ import mozilla.components.support.base.log.logger.Logger
+ import mozilla.components.support.utils.Browsers
+-import org.mozilla.fenix.GleanMetrics.Pings
+ import org.mozilla.fenix.R
+ import org.mozilla.fenix.components.accounts.FenixFxAEntryPoint
+ import org.mozilla.fenix.components.appstate.AppAction
+@@ -320,11 +319,6 @@
+             )
+         }
+ 
+-        if (!settings.isTelemetryEnabled) {
+-            Pings.onboardingOptOut.setEnabled(true)
+-            Pings.onboardingOptOut.submit()
+-        }
+-
+         rtamoAttributionHandler.handleReferrer(InstallReferrerHandlingService.response)
+ 
+         // The marketing telemetry may be enabled after finishing onboarding.
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/utils/Settings.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/utils/Settings.kt
+--- a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/utils/Settings.kt
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/utils/Settings.kt
+@@ -726,7 +726,7 @@
+     var isTelemetryEnabled by
+         booleanPreference(
+             appContext.getPreferenceKey(R.string.pref_key_telemetry),
+-            default = true,
++            default = false,
+         )
+ 
+     var isMarketingTelemetryEnabled by
+diff --git a/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/MatreshkaGleanUploader.kt b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/MatreshkaGleanUploader.kt
+new file mode 100644
+--- /dev/null
++++ b/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/MatreshkaGleanUploader.kt
+@@ -0,0 +1,15 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.fenix.components
++
++import mozilla.telemetry.glean.internal.UploadResult
++import mozilla.telemetry.glean.net.CapablePingUploadRequest
++import mozilla.telemetry.glean.net.PingUploader
++
++/** Drops every Glean ping before it can touch the network. */
++internal object MatreshkaGleanUploader : PingUploader {
++    override fun upload(request: CapablePingUploadRequest): UploadResult =
++        UploadResult.UnrecoverableFailure(0.toByte())
++}
