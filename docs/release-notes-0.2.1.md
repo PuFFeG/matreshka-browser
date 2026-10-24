@@ -1,5 +1,7 @@
 Matreshka Browser 0.2.1 для ARM64.
 
+**Коротко:** Glean-телеметрия Mozilla отключена, сторонние Sentry, Adjust и Firebase удалены. Браузер не отправляет статистику просмотра; crash-отчёт Mozilla — только по кнопке.
+
 ## Идентификация APK
 
 - Package: `ru.matreshka.browser`
