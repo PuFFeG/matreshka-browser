@@ -11,7 +11,7 @@ series is ordered and applied by `scripts/apply-fenix-patches.sh`, which is call
 
 ## Leanplum and Crashlytics
 
-Fenix 160.0a1 no longer contains Leanplum or Crashlytics. There is no Gradle dependency,
+Fenix 160.0.1 no longer contains Leanplum or Crashlytics. There is no Gradle dependency,
 Kotlin/Java class or startup hook for either SDK in this tree. Patch 0001 removes the actual
 third-party SDKs that are still present:
 

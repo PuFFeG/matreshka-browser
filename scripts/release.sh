@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Build and sign an ARM64 release, then write dist/<name> and SHA256SUMS.
-# Usage: VERSION=0.2.1 FIREFOX_SRC=/path/to/firefox ./scripts/release.sh
+# Usage: VERSION=0.3.0 FIREFOX_SRC=/path/to/firefox ./scripts/release.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="${FIREFOX_SRC:-}"
 VERSION="${VERSION:-}"
 [ -n "$SRC" ] || { echo "error: set FIREFOX_SRC" >&2; exit 2; }
-[ -n "$VERSION" ] || { echo "error: set VERSION (e.g. 160.0a1)" >&2; exit 2; }
+[ -n "$VERSION" ] || { echo "error: set VERSION (e.g. 0.3.0)" >&2; exit 2; }
 
 "$ROOT/scripts/apply.sh" "$SRC"
 OUT="$("$ROOT/scripts/build-release.sh" "$SRC" | sed -n 's/^APK=//p' | tail -1)"

@@ -3,11 +3,11 @@
   <h1>Matreshka Browser</h1>
   <p><strong>Инженерный форк Firefox (Fenix) для Android, реализующий принцип наименьших привилегий (Least Privilege) при работе с национальными цепочками доверия.</strong></p>
   <p>Браузер обеспечивает изолированную работу с российскими веб-ресурсами и минимизирует площадь атаки (Attack Surface Reduction) за счёт строгого ограничения области действия корневых сертификатов.</p>
-  <p>Fenix / Firefox 160.0a1 · v0.2.1 · ARM64 · открытый патч-стек</p>
+  <p>Fenix / Firefox 160.0.1 · v0.3.0 · ARM64 · открытый патч-стек</p>
   <p>
     <img src="https://img.shields.io/badge/Android-8%2B%20%C2%B7%20minSdk%2026-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 8+">
     <img src="https://img.shields.io/badge/ABI-arm64--v8a-f5a524?style=for-the-badge" alt="ARM64">
-    <img src="https://img.shields.io/badge/Firefox-160.0a1-FF7139?style=for-the-badge" alt="Firefox 160 base">
+    <img src="https://img.shields.io/badge/Firefox-160.0.1-FF7139?style=for-the-badge" alt="Firefox 160.0.1 base">
     <img src="https://img.shields.io/badge/License-MPL--2.0-4C9AFF?style=for-the-badge" alt="MPL-2.0">
   </p>
   <p>
@@ -79,22 +79,22 @@ Matreshka Browser — форк Fenix с открытым патч-стеком �
 
 - [Страница релизов](https://github.com/PuFFeG/matreshka-browser/releases)
 
-Релиз `v0.2.1`: [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.1/matreshka-browser-0.2.1-arm64-v8a-release.apk) · [SHA256SUMS](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.2.1/SHA256SUMS). Скачивайте оба файла только со страницы [GitHub Releases](https://github.com/PuFFeG/matreshka-browser/releases/latest).
+Релиз `v0.3.0`: [ARM64 APK](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.3.0/matreshka-browser-0.3.0-arm64-v8a-release.apk) · [SHA256SUMS](https://github.com/PuFFeG/matreshka-browser/releases/download/v0.3.0/SHA256SUMS). Скачивайте оба файла только со страницы [GitHub Releases](https://github.com/PuFFeG/matreshka-browser/releases/latest).
 
 | Параметр | Значение |
 | --- | --- |
 | Название | `matreshka-browser` |
-| Версия | `0.2.1` (`versionCode 2016191883`) |
+| Версия | `0.3.0` (`versionCode 2016197402`) |
 | Android | 8.0+ (`minSdk 26`) |
 | ABI | `arm64-v8a` |
 | Package | `ru.matreshka.browser` |
-| База | Firefox/Fenix `160.0a1`, BuildID `20261022001515` |
+| База | Firefox/Fenix `160.0.1`, BuildID `20261120140537` |
 | Лицензия | MPL-2.0 |
 
 Перед установкой проверьте подпись APK и контрольную сумму из того же релиза:
 
 ```sh
-apksigner verify --print-certs matreshka-browser-0.2.1-arm64-v8a-release.apk
+apksigner verify --print-certs matreshka-browser-0.3.0-arm64-v8a-release.apk
 sha256sum -c SHA256SUMS
 ```
 
@@ -102,11 +102,11 @@ Fingerprint сертификата подписи релиза: `D697BD505F67DA0
 
 ## Сборка
 
-Требуется дерево Firefox `160.0a1` с `mobile/android/fenix`, JDK 17 и Android SDK/NDK, Rust и Python, настроенные через `./mach bootstrap`.
+Требуется дерево Firefox `160.0.1` с `mobile/android/fenix`, JDK 17 и Android SDK/NDK, Rust и Python, настроенные через `./mach bootstrap`.
 
 ```sh
 export FIREFOX_SRC="$HOME/src/firefox"
-export JAVA_HOME="$HOME/.mozbuild/jdk/jdk-17.0.20.1+1"
+export JAVA_HOME="$HOME/.mozbuild/jdk/jdk-17.0.21.1+2"
 
 ./scripts/apply.sh "$FIREFOX_SRC"
 MOZCONFIG="$FIREFOX_SRC/mozconfig-arm64" ./scripts/build-release.sh "$FIREFOX_SRC"
@@ -117,20 +117,20 @@ MOZCONFIG="$FIREFOX_SRC/mozconfig-arm64" ./scripts/build-release.sh "$FIREFOX_SR
 ```sh
 ./scripts/sign-apk.sh \
   "$FIREFOX_SRC/obj-aarch64-unknown-linux-android/gradle/build/mobile/android/fenix/app/outputs/apk/release/fenix-arm64-v8a-release.apk" \
-  "dist/matreshka-browser-0.2.1-arm64-v8a-release.apk"
+  "dist/matreshka-browser-0.3.0-arm64-v8a-release.apk"
 ```
 
 Либо запустите полный цикл сборки и подготовки релиза:
 
 ```sh
-VERSION=0.2.1 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
+VERSION=0.3.0 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
 ```
 
 Для изменённого C++-кода GeckoView требуется полная сборка, не artifact mode. Ключ подписи хранится локально и не входит в репозиторий; его потеря помешает устанавливать обновления поверх текущей сборки. Дополнительные сведения — в [fenix/README.md](fenix/README.md).
 
 ## Телеметрия и сеть
 
-В 0.2.1 удалены Sentry, Adjust и Firebase Messaging. Загрузка Glean отключена на уровне SDK, телеметрия по умолчанию выключена. Leanplum и Crashlytics в базе Fenix 160.0a1 отсутствуют. Socorro crash reporting и Nimbus/Remote Settings Mozilla остаются.
+В 0.3.0 удалены Sentry, Adjust и Firebase Messaging. Загрузка Glean отключена на уровне SDK, телеметрия по умолчанию выключена. Leanplum и Crashlytics в базе Fenix 160.0.1 отсутствуют. Socorro crash reporting и Nimbus/Remote Settings Mozilla остаются.
 
 ## Безопасность и ограничения
 
@@ -141,7 +141,7 @@ VERSION=0.2.1 FIREFOX_SRC="$FIREFOX_SRC" ./scripts/release.sh
 - Удалённый список не может обновлять корневые сертификаты. Они обновляются только вместе с APK.
 - Storage-контекст не разделяет HTTP cache, permissions и другие данные из таблицы выше.
 - APK пока устанавливается и обновляется вручную. Сборка ARM64 проверена на устройстве.
-- В опубликованном 0.2.0 могут оставаться компоненты телеметрии и строки/иконки Mozilla. В исходниках 0.2.1 удалены Sentry, Adjust и Firebase Messaging, а загрузка Glean отключена; Socorro и Nimbus Mozilla остаются.
+- В опубликованных 0.2.x могут оставаться компоненты телеметрии и строки/иконки Mozilla. В исходниках 0.3.0 удалены Sentry и Adjust, а загрузка Glean отключена; Socorro и Nimbus Mozilla остаются.
 
 Сообщения об уязвимостях и проблемах безопасности направляйте владельцам репозитория приватным способом, если такой канал указан в настройках проекта.
 

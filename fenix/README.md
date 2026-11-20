@@ -51,7 +51,7 @@ Debug x86_64 for emulator testing:
 
 ```sh
 cd /path/to/firefox
-export JAVA_HOME="$HOME/.mozbuild/jdk/jdk-17.0.20.1+1"
+export JAVA_HOME="$HOME/.mozbuild/jdk/jdk-17.0.21.1+2"
 export MOZCONFIG=$PWD/mozconfig
 ./mach gradle fenix:assembleDebug
 ```
@@ -70,7 +70,7 @@ obj-aarch64-unknown-linux-android/gradle/build/mobile/android/fenix/app/outputs/
 ```
 
 Signing and the release flow are in [`../scripts/`](../scripts/). The release APK is
-`ru.matreshka.browser`, version 0.2.1, minSdk 26, native `arm64-v8a`.
+`ru.matreshka.browser`, version 0.3.0, minSdk 26, native `arm64-v8a`.
 
 ## Verified
 
